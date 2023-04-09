@@ -26,8 +26,9 @@ extern HardwareSerial hal_serial;
 extern fabgl::Terminal* fabgl_terminal;
 
 void hal_printf (const char* format, ...);
-void hal_hostpc_serial (fabgl::Terminal*);
+void hal_hostpc_serial_init (fabgl::Terminal*);
 char hal_hostpc_serial_read ();
+void hal_ez80_serial_init ();
 
 void setRTSStatus(bool value);
 bool getCTSStatus ();

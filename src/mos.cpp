@@ -10,6 +10,17 @@
 
 #include "mos.h"
 
+uint8_t col,row;
+
+void mos_init ()
+{
+    col=1;
+    row=1;
+
+    // send ESC to EZ80
+    ez80_serial.write(27);
+}
+
 // Send a packet of data to the MOS
 //
 void mos_send_packet(byte code, byte len, byte data[]) {
@@ -38,12 +49,24 @@ void mos_send_vdp_mode ()
 }
 void mos_send_cursor_pos ()
 {
-    int x,y;
-    termctrl.getCursorPos (&x,&y);
     byte packet[] = {
-        (byte) (x-2),
-        (byte) (y-1),
+        (byte) (col),
+        (byte) (row),
     };
     //hal_printf ("x:%d,y:%d",x,y);
     mos_send_packet(PACKET_CURSOR, sizeof packet, packet);	
+}
+
+void mos_col_left ()
+{
+    if (col>1)
+        col--;
+}
+void mos_col_right ()
+{
+    col++;
+}
+void mos_set_column (uint8_t c)
+{
+    col = c;
 }

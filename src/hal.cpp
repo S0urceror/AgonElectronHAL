@@ -12,6 +12,18 @@
 HardwareSerial host_serial(0);
 fabgl::Terminal* fabgl_terminal;
 
+void hal_ez80_serial_init ()
+{
+	ez80_serial.end();
+    ez80_serial.setRxBufferSize(1024);
+    ez80_serial.begin(UART_BR, SERIAL_8N1, UART_RX, UART_TX);
+    ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_RTS, 64);			// Can be called whenever
+	ez80_serial.setPins(UART_NA, UART_NA, UART_CTS, UART_RTS);	// Must be called after begin
+    pinMode(UART_RTS, OUTPUT);
+    pinMode(UART_CTS, INPUT);	
+    setRTSStatus(true);
+}
+
 // Set the RTS line value
 //
 void setRTSStatus(bool value) {
@@ -25,7 +37,7 @@ bool getCTSStatus ()
     return digitalRead (UART_CTS)&0b1;
 }
 
-void hal_hostpc_serial (fabgl::Terminal* term)
+void hal_hostpc_serial_init (fabgl::Terminal* term)
 {   
     fabgl_terminal = term;
 	host_serial.begin(115200, SERIAL_8N1, 3, 1);
