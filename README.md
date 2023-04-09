@@ -29,7 +29,7 @@ Below some detailed shots of the setup.
 ![GPIO closeup](doc/IMG_0785.jpeg)
 ![ZDI closeup](doc/IMG_0786.jpeg)
 
-### large memory transfers
+### Large memory transfers
 One of the features of this special firmware is the ability to receive and send things to EZ80 memory by simple copying and pasting. This is done with the Intel HEX format which converts binary contents to a character stream. With tools like bin2hex and hex2bin you can convert from and to this format. You might want to automate this in your compilation setup. 
 
 I got the best results with MiniCOM. I set the newline tx delay to 100ms. This way the ESP/EZ80 have some time to write thing to memory. Main reason is that the USB serial from host pc to ESP does not support hardware based overflow protection (RTS,CTS). Limitation of the current hw-design where RTS/CTS from the CH340 are used differently.
@@ -59,3 +59,16 @@ j address       - jump to address
 x address size  - examine memory from address
 :0123456789ABCD - data in Intel Hex format
 ```
+
+All parameters are assumed to be HEX values. You can prepend them with 0x for clarity but that is not necessary.
+
+So:
+```
+b 0xB0000
+```
+Is equal to:
+```
+b B0000
+```
+
+Addresses are assumed long-range ADL addresses using the 24-bit addressing range of the EZ80. Once I implement an ADL/Z80 mode switch I'll revisit this.
