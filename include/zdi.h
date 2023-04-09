@@ -5,7 +5,7 @@
 #define ZDI_TDI 27
 #define ZDI_READ 1
 #define ZDI_WRITE 0
-#define ZDI_WAIT_MICRO 100
+#define ZDI_WAIT_MICRO 50
 #define ZDI_CMD_CONTINUE 0
 #define ZDI_CMD_DONE 1
 

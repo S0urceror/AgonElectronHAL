@@ -11,39 +11,16 @@
 #include "fabgl.h"
 #include "hal.h"
 #include "zdi.h"
+#include "mos.h"
 
 #define SERIALKB 1
 
 fabgl::PS2Controller    PS2Controller;
 fabgl::VGA16Controller  DisplayController;
-fabgl::Terminal         Terminal;
+fabgl::Terminal         terminal;
+TerminalController      termctrl;
 bool                    ZDIMode=false;
 
-// Set the RTS line value
-//
-void setRTSStatus(bool value) {
-	digitalWrite(UART_RTS, value ? LOW : HIGH);		// Asserts when LOW
-}
-
-bool getCTSStatus ()
-{
-    // TODO: full hw handshake support
-    return true;
-    return digitalRead (UART_CTS)&0b1;
-}
-
-// Send a packet of data to the MOS
-//
-void send_packet(byte code, byte len, byte data[]) {
-    // wait for CTS
-    while (!getCTSStatus());
-
-    ez80_serial.write(code + 0x80);
-    ez80_serial.write(len);
-    for(int i = 0; i < len; i++) {
-        ez80_serial.write(data[i]);
-    }
-}
 
 // Handle the keyboard
 void do_keyboard()
@@ -64,7 +41,7 @@ void do_keyboard()
             if (zdi_mode())
                 zdi_process_cmd (ch);
             else
-		        send_packet(PACKET_KEYCODE, sizeof packet, packet);
+		        mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
         }
 	} 
     else
@@ -102,7 +79,7 @@ void do_keyboard()
                         item.down,
                     };
                     // key is echoed back by EZ80
-                    send_packet(PACKET_KEYCODE, sizeof packet, packet);
+                    mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
                 }
                 else
                 {
@@ -117,9 +94,9 @@ void do_keyboard()
 void boot_screen()
 {
     // initialize terminal
-    Terminal.write("\e[44;37m"); // background: blue, foreground: white
-    Terminal.write("\e[2J");     // clear screen
-    Terminal.write("\e[1;1H");   // move cursor to 1,1
+    terminal.write("\e[44;37m"); // background: blue, foreground: white
+    terminal.write("\e[2J");     // clear screen
+    terminal.write("\e[1;1H");   // move cursor to 1,1
 
     hal_printf("Electron - HAL - version 0.0.1\r\n");
     hal_printf("a playful alternative to Quark\r\n\n");
@@ -152,11 +129,13 @@ void setup()
     DisplayController.setResolution(VGA_640x480_60Hz);
     
     // setup terminal
-    Terminal.begin(&DisplayController);
-    Terminal.enableCursor(true);
+    terminal.begin(&DisplayController);
+    terminal.connectLocally();
+    terminal.enableCursor(true);
+    termctrl.setTerminal (&terminal);
 
     // setup serial to hostpc and link to terminal
-    hal_hostpc_serial (&Terminal);
+    hal_hostpc_serial (&terminal);
 }
 
 void loop()
@@ -182,28 +161,34 @@ void loop()
                 {
                     case '\r':
                     case '\n':
+                    case 0x09: // ??
                         hal_printf ("%c",c);
                         break;
-                    case 0x17:
+                    case 0x08: // backspace
+                        hal_printf ("%c %c",c,c);
+                        break;
+                    case 23: // MOS escape code
                         if ((c=ez80_serial.read())==0)
                         {
-                          if ((c=ez80_serial.read())==0x86)
-                          {
-                            byte packet[] = {
-                                0x80,	 						// Width in pixels (L)
-                                0x02,       					// Width in pixels (H)
-                                0xe0,							// Height in pixels (L)
-                                0x01,       					// Height in pixels (H)
-                                80 ,	                        // Width in characters (byte)
-                                60 ,	                        // Height in characters (byte)
-                                64,       						// Colour depth
-                            };
-                            send_packet(PACKET_MODE, sizeof packet, packet);
-                            break;
-                          }
+                            c=((byte) ez80_serial.read());
+                            switch (c)
+                            {
+                                case 0x86: // VDP_MODE
+                                    mos_send_vdp_mode ();
+                                    break;
+                                case 0x82: // VDP_CURSOR
+                                    mos_send_cursor_pos ();
+                                    break;
+                                default:
+                                    hal_printf ("VDP:0x%02X;",c);
+                                    break;
+                            }
                         }
+                        else
+                            hal_printf ("MOS:0x%02X;",c);
+                        break;
                     default:
-                        hal_printf ("0x%02X;",c);
+                        hal_printf ("ERR:0x%02X;",c);
                         break;
                 }
             }

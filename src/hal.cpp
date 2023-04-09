@@ -3,6 +3,19 @@
 HardwareSerial host_serial(0);
 fabgl::Terminal* fabgl_terminal;
 
+// Set the RTS line value
+//
+void setRTSStatus(bool value) {
+	digitalWrite(UART_RTS, value ? LOW : HIGH);		// Asserts when LOW
+}
+
+bool getCTSStatus ()
+{
+    // TODO: full hw handshake support
+    return true;
+    return digitalRead (UART_CTS)&0b1;
+}
+
 void hal_hostpc_serial (fabgl::Terminal* term)
 {   
     fabgl_terminal = term;

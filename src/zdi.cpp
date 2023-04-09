@@ -1,14 +1,6 @@
 #include "hal.h"
 #include "zdi.h"
 
-#define ZDI_TCK 26
-#define ZDI_TDI 27
-#define ZDI_READ 1
-#define ZDI_WRITE 0
-#define ZDI_WAIT_MICRO 1000
-#define ZDI_CMD_CONTINUE 0
-#define ZDI_CMD_DONE 1
-
 byte debug_flags = 0x00;
 bool zdi_mode_flag = false;
 uint8_t bpcnt = 0;
@@ -358,10 +350,13 @@ void zdi_intel_hex (byte* memory,uint32_t start,uint16_t size)
             if (new_upper_address!=upper_address)
             {
                 upper_address = new_upper_address;
-                checksum = (~upper_address);
+                checksum = (~(0x02+0x04+upper_address));
                 hal_printf (":0200000400%02X%02X\r\n",upper_address,checksum+1);
+                checksum = 0;
             }
-            hal_printf (":%02X%04X00",16,i+(start&0xffff));
+            uint16_t pc = i+(start&0xffff);
+            hal_printf (":%02X%04X00",0x10,pc);
+            checksum += 0x10 + ((pc>>8)&0xff) + (pc&0xff);
         }
         checksum+=memory[i];
         hal_printf ("%02X",memory[i]);
@@ -389,6 +384,7 @@ void zdi_process_line ()
             hal_printf ("\r\nc               - continue the program");
             hal_printf ("\r\ns               - step by step");
             hal_printf ("\r\nr               - show registers and status");
+            hal_printf ("\r\nj address       - jump to address");
             hal_printf ("\r\nx address size  - examine memory from address");
             hal_printf ("\r\n:0123456789ABCD - data in Intel Hex format");
             hal_printf ("\r\n#");
@@ -429,6 +425,32 @@ void zdi_process_line ()
             }
             else
                 hal_printf ("\r\n(error, specify breakpoint)\r\n#");
+            break;
+        case 'j': // jump to address
+            if (charcnt>2)
+            {
+                u32_t address=strtoul (szLine+2,NULL,16);
+                bool already_breaked = false;
+                if (zdi_debug_breakpoint_reached())
+                    already_breaked = true;
+                else
+                    zdi_debug_break ();
+                zdi_write_cpu (REG_PC,address);
+                // continue if
+                if (!already_breaked)
+                {
+                    hal_printf ("\r\n(jumping to 0x%06X)\r\n#",address);
+                    zdi_debug_continue();
+                }
+                else
+                {
+                    hal_printf ("\r\n(PC set to 0x%06X)\r\n#",address);
+                }
+            }
+            else
+            {
+                hal_printf ("\r\n(error, no jump address)\r\n#");
+            }
             break;
         case 'x': // examine, memory dump
             if (charcnt>2)
@@ -558,19 +580,24 @@ void zdi_process_line ()
 }
 void zdi_process_cmd (uint8_t key)
 {
+    //hal_printf ("%02X",key);
     switch (key)
     {
+        case 0x08: // backspace
+            hal_printf ("%c %c",key,key);
+            szLine[--charcnt]='\0';
+            break;
         case 'q':
-        case 0x1b:  
+        case 0x1b: // escape
             zdi_exit();
             break;
-        case '\r':
+        case '\r': // carriage return
             // process line
             zdi_process_line ();
             memset (szLine,0,sizeof(szLine));
             charcnt=0;
             break;
-        case '\n':
+        case '\n': // newline
             // absorb
             break;
         default:
@@ -590,6 +617,7 @@ void zdi_enter ()
     memset (szLine,0,sizeof(szLine));
     charcnt=0;
     upper_address = 0x00;
+    debug_flags = 0x00;
 
     zdi_mode_flag = true;
     digitalWrite (ZDI_TCK,HIGH);
