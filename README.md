@@ -13,10 +13,11 @@ Currently this HAL has the following features:
     - EZ80 status
     - EZ80 register contents
     - 4 HW breakpoints
-    - Break/Continue/Run
+    - Break/Step/Continue
+    - Jump to memory location
 - EZ80 ZDI memory access
-    - load
-    - save
+    - read
+    - write
 
 ## Hardware setup
 To be able to use the ZDI interface we need to connect two GPIO pins that come from the ESP32 and connect them with the corresponding pins on the EZ80. I don't know what is wrong with either the schematic or silk screen but I connected pins 4 and 6 on the ZDI connector. Of course I first probed around to see if they where correct and they are.
@@ -72,3 +73,22 @@ b B0000
 ```
 
 Addresses are assumed long-range ADL addresses using the 24-bit addressing range of the EZ80. Once I implement an ADL/Z80 mode switch I'll revisit this.
+
+## Memory map
+The EZ80's memory map depends on the firmware that was flashed into it. If you run MOS RC2 it looks like this:
+```
+512KB External RAM  = 0-0000 - 8-0000
+8KB internal RAM    = 0-0000 - 0-2000
+
+B-FFFF		Internal Data RAM
+B-C000		Internal Data RAM
+B-BFFF		External RAM
+B-0000		External RAM
+A-FFFF		SPL+SPS
+A-0000		SPL
+4-0000		External RAM
+3-FFFF		—
+2-0000		—
+1-FFFF		Flash ROM
+0-0000		Flash ROM
+```
