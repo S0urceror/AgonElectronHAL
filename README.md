@@ -32,7 +32,7 @@ Below some detailed shots of the setup.
 ### large memory transfers
 One of the features of this special firmware is the ability to receive and send things to EZ80 memory by simple copying and pasting. This is done with the Intel HEX format which converts binary contents to a character stream. With tools like bin2hex and hex2bin you can convert from and to this format. You might want to automate this in your compilation setup. 
 
-I got the best results with MiniCOM. I set the newline tx delay to 100ms. This way the ESP/EZ80 have some time to write thing to memory. Main reason is that the USB serial from host pc to ESP does not support hardware based overflow protection (RTS,CTS)
+I got the best results with MiniCOM. I set the newline tx delay to 100ms. This way the ESP/EZ80 have some time to write thing to memory. Main reason is that the USB serial from host pc to ESP does not support hardware based overflow protection (RTS,CTS). Limitation of the current hw-design where RTS/CTS from the CH340 are used differently.
 ![minicom](doc/minicom.jpg)
 
 ## Software setup
@@ -41,7 +41,7 @@ For the software setup you need the Arduino software or PlatformIO correctly con
 ### Usage
 At boot the Agon behaves like normal. Only it sits in Terminal character-only mode (for now). In this mode it will echo the output of MOS to the terminal but also output the same via USB serial to the host PC. And vice-versa, keyboard input on the host pc travels to the ESP which sends it to the EZ80.
 
-##Enter ZDI mode
+## Enter ZDI mode
 To enter ZDI mode you have to press CTRL-Z. You see the prompt changes from * to #. Also the version and revision of the EZ80 chip are shown. In this case 7.AA.
 
 Now you can enter the following commands:
