@@ -1,3 +1,12 @@
+/*
+ * Title:           Electron - HAL
+ *                  a playful alternative to Quark
+ *                  quarks and electrons combined are matter.
+ * Author:          Mario Smit (S0urceror)
+*/
+
+// Hardware Abstraction Layer
+
 #include "hal.h"
 
 HardwareSerial host_serial(0);

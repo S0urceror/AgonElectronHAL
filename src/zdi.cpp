@@ -1,3 +1,12 @@
+/*
+ * Title:           Electron - HAL
+ *                  a playful alternative to Quark
+ *                  quarks and electrons combined are matter.
+ * Author:          Mario Smit (S0urceror)
+*/
+
+// ZDI library
+
 #include "hal.h"
 #include "zdi.h"
 

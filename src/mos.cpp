@@ -1,4 +1,13 @@
 
+/*
+ * Title:           Electron - HAL
+ *                  a playful alternative to Quark
+ *                  quarks and electrons combined are matter.
+ * Author:          Mario Smit (S0urceror)
+*/
+
+// MOS interoperability layer (not complete)
+
 #include "mos.h"
 
 // Send a packet of data to the MOS
