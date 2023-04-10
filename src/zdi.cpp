@@ -391,7 +391,7 @@ void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
     strncpy (szType,szLine+7,2);szType[2]='\0';
     strncpy (szCheckSum,szLine+charcnt-2,2);szCheckSum[2]='\0';
     uint8_t len = strtoul (szLen,NULL,16);
-    uint16_t address = strtoul (szAddress,NULL,16);
+    uint32_t address = strtoul (szAddress,NULL,16);
     uint8_t type = strtoul (szType,NULL,16);
     uint8_t checksum = strtoul (szCheckSum,NULL,16);
     uint8_t check = (uint8_t)len + 
@@ -414,24 +414,25 @@ void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
         // calculate long address
         address = (upper_address<<16)+address;
         
-        // allocate memory and parse data
+        // allocate memory
         byte* memory = (byte*) malloc (len);
+        
+        // parse data
         for (uint8_t i=0;i<len;i++)
         {
             strncpy (szByte,szLine+9+i*2,2);szByte[2]='\0';
             memory[i] = strtoul (szByte,NULL,16);
-            check+=memory[i];
+            check = check + memory[i];
         }
+
+        // only write to memory when no checksum error
         check = ~check;
         if ((check+1) != checksum)
-        {
             hal_printf (" (checksum error)");
-        }
         else
-        {
             // write to ez80 and free memory
             zdi_write_memory (address,len,memory);
-        }
+
         free (memory);
 
         // restore pc
@@ -609,7 +610,6 @@ void zdi_process_line ()
 }
 void zdi_process_cmd (uint8_t key)
 {
-    //hal_printf ("%02X",key);
     switch (key)
     {
         case 0x08: // backspace
