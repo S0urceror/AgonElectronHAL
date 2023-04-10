@@ -353,7 +353,7 @@ void zdi_debug_status (debug_state_t state)
     hal_printf ("\r\n(%s)\r\n#",prompt);                                                                            
 }
 
-void zdi_intel_hex (byte* memory,uint32_t start,uint16_t size)
+void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size)
 {
     uint8_t checksum=0;
     for (int i=0;i<size;i++)
@@ -383,7 +383,71 @@ void zdi_intel_hex (byte* memory,uint32_t start,uint16_t size)
     }
     hal_printf (":00000001FF\r\n#");
 }
+void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
+{
+    char szLen[3],szAddress[5],szType[3],szCheckSum[3],szByte[3];
+    strncpy (szLen,szLine+1,2);szLen[2]='\0';
+    strncpy (szAddress,szLine+3,4);szAddress[4]='\0';
+    strncpy (szType,szLine+7,2);szType[2]='\0';
+    strncpy (szCheckSum,szLine+charcnt-2,2);szCheckSum[2]='\0';
+    uint8_t len = strtoul (szLen,NULL,16);
+    uint16_t address = strtoul (szAddress,NULL,16);
+    uint8_t type = strtoul (szType,NULL,16);
+    uint8_t checksum = strtoul (szCheckSum,NULL,16);
+    uint8_t check = (uint8_t)len + 
+                    (uint8_t)((address>>8)&0xff) + 
+                    (uint8_t)(address&0xff) + 
+                    (uint8_t)type;
+    
+    if (type==0)
+    {
+        // break cpu
+        bool already_breaked = false;
+        if (zdi_debug_breakpoint_reached())
+            already_breaked = true;
+        else
+            zdi_debug_break ();
+        
+        // get pc
+        uint32_t pc = zdi_read_cpu (REG_PC);
 
+        // calculate long address
+        address = (upper_address<<16)+address;
+        
+        // allocate memory and parse data
+        byte* memory = (byte*) malloc (len);
+        for (uint8_t i=0;i<len;i++)
+        {
+            strncpy (szByte,szLine+9+i*2,2);szByte[2]='\0';
+            memory[i] = strtoul (szByte,NULL,16);
+            check+=memory[i];
+        }
+        check = ~check;
+        if ((check+1) != checksum)
+        {
+            hal_printf (" (checksum error)");
+        }
+        else
+        {
+            // write to ez80 and free memory
+            zdi_write_memory (address,len,memory);
+        }
+        free (memory);
+
+        // restore pc
+        zdi_write_cpu (REG_PC, pc);
+
+        // continue if
+        if (!already_breaked)
+            zdi_debug_continue();
+    }
+    if (type==4 || type==2)
+    {
+        char szUpper[5];
+        strncpy (szUpper,szLine+9,4);szUpper[4]='\0';
+        upper_address = strtoul (szUpper,NULL,16)&0xff;
+    }
+}
 void zdi_process_line ()
 {
     switch (szLine[0])
@@ -491,7 +555,7 @@ void zdi_process_line ()
 
                 byte* mem = (byte*) malloc (size);
                 zdi_read_memory (address,size,mem);
-                zdi_intel_hex (mem,address,size);
+                zdi_bin_to_intel_hex (mem,address,size);
                 free (mem);
 
                 // restore pc
@@ -532,55 +596,7 @@ void zdi_process_line ()
         case ':':
             if (charcnt>=1+2+4+2+2)
             {
-                char szLen[3],szAddress[5],szType[3],szCheckSum[3],szByte[3];
-                strncpy (szLen,szLine+1,2);szLen[2]='\0';
-                strncpy (szAddress,szLine+3,4);szAddress[4]='\0';
-                strncpy (szType,szLine+7,2);szType[2]='\0';
-                strncpy (szCheckSum,szLine+charcnt-2,2);szCheckSum[2]='\0';
-                uint8_t len = strtoul (szLen,NULL,16);
-                uint32_t address = strtoul (szAddress,NULL,16);
-                uint8_t type = strtoul (szType,NULL,16);
-                uint8_t checksum = strtoul (szCheckSum,NULL,16);
-                
-                if (type==0)
-                {
-                    // break cpu
-                    bool already_breaked = false;
-                    if (zdi_debug_breakpoint_reached())
-                        already_breaked = true;
-                    else
-                        zdi_debug_break ();
-                    
-                    // get pc
-                    uint32_t pc = zdi_read_cpu (REG_PC);
-
-                    // calculate long address
-                    address = (upper_address<<16)+address;
-                    
-                    // allocate memory and parse data
-                    byte* memory = (byte*) malloc (len);
-                    for (uint8_t i=0;i<len;i++)
-                    {
-                        strncpy (szByte,szLine+9+i*2,2);szByte[2]='\0';
-                        memory[i] = strtoul (szByte,NULL,16);
-                    }
-                    // write to ez80 and free memory
-                    zdi_write_memory (address,len,memory);
-                    free (memory);
-
-                    // restore pc
-                    zdi_write_cpu (REG_PC, pc);
-
-                    // continue if
-                    if (!already_breaked)
-                        zdi_debug_continue();
-                }
-                if (type==4 || type==2)
-                {
-                    char szUpper[5];
-                    strncpy (szUpper,szLine+9,4);szUpper[4]='\0';
-                    upper_address = strtoul (szUpper,NULL,16)&0xff;
-                }
+                zdi_intel_hex_to_bin (szLine,charcnt);
                 hal_printf ("\r\n#");
             }
             else
