@@ -6,6 +6,7 @@
 // MOS compatibility layer
 void mos_init ();
 void mos_send_packet(byte code, byte len, byte data[]);
+void mos_send_general_poll ();
 void mos_send_vdp_mode ();
 void mos_send_cursor_pos ();
 void mos_col_left ();

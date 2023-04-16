@@ -34,6 +34,15 @@ void mos_send_packet(byte code, byte len, byte data[]) {
     }
 }
 
+void mos_send_general_poll ()
+{
+    byte uv = ez80_serial.read();
+    byte packet[] = {
+        uv
+    };
+    mos_send_packet(PACKET_GP, sizeof packet, packet);
+}
+
 void mos_send_vdp_mode ()
 {
     byte packet[] = {

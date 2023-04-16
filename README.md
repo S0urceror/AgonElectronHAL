@@ -74,21 +74,47 @@ b B0000
 
 Addresses are assumed long-range ADL addresses using the 24-bit addressing range of the EZ80. Once I implement an ADL/Z80 mode switch I'll revisit this.
 
-## Memory map
+## Memory map in MOS
 The EZ80's memory map depends on the firmware that was flashed into it. If you run MOS RC2 it looks like this:
 ```
-512KB External RAM  = 0-0000 - 8-0000
-8KB internal RAM    = 0-0000 - 0-2000
+512KB External RAM  = 00-0000 - 08-0000
+8KB internal RAM    = 00-0000 - 00-2000
 
-B-FFFF		Internal Data RAM
-B-C000		Internal Data RAM
-B-BFFF		External RAM
-B-0000		External RAM
-A-FFFF		SPL+SPS
-A-0000		SPL
-4-0000		External RAM
-3-FFFF		—
-2-0000		—
-1-FFFF		Flash ROM
-0-0000		Flash ROM
+FF-FFFF
+...
+...
+B7-FFFF		Internal Data RAM
+B7-C000		Internal Data RAM
+...
+...
+0C-0000		                        External RAM
+0B-0000		SPL+SPS                 External RAM
+0A-0000		SPL                     External RAM
+09-0000		                        External RAM
+08-0000		                        External RAM
+07-0000		                        External RAM
+06-0000		                        External RAM
+05-0000		                        External RAM
+04-0000		                        External RAM
+03-0000
+02-0000     Flash ROM
+01-0000     Flash ROM
+00-0000		Flash ROM
+```
+
+## Memory map after RESET
+```
+FF-FFFF		Internal Data RAM
+FF-C000		Internal Data RAM
+...
+...
+08-0000		                        External RAM
+07-0000		                        External RAM
+06-0000		                        External RAM
+05-0000		                        External RAM
+04-0000		                        External RAM
+03-0000                             External RAM
+02-0000     Flash ROM               External RAM
+01-0000     Flash ROM               External RAM
+00-0000		Flash ROM               External RAM
 ```

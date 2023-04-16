@@ -353,12 +353,13 @@ void zdi_debug_status (debug_state_t state)
     hal_printf ("\r\n(%s)\r\n#",prompt);                                                                            
 }
 
+#define LINE_LENGTH 0x20
 void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size)
 {
     uint8_t checksum=0;
     for (int i=0;i<size;i++)
     {
-        if ((i%16)==0)
+        if ((i%LINE_LENGTH)==0)
         {
             uint8_t new_upper_address = (start>>16);
             if (new_upper_address!=upper_address)
@@ -369,15 +370,15 @@ void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size)
                 checksum = 0;
             }
             uint16_t pc = i+(start&0xffff);
-            hal_printf (":%02X%04X00",0x10,pc);
-            checksum += 0x10 + ((pc>>8)&0xff) + (pc&0xff);
+            hal_printf (":%02X%04X00",LINE_LENGTH,pc);
+            checksum += LINE_LENGTH + ((pc>>8)&0xff) + (pc&0xff);
         }
         checksum+=memory[i];
         hal_printf ("%02X",memory[i]);
-        if ((i%16)==15)
+        if ((i%LINE_LENGTH)==(LINE_LENGTH-1))
         {
             checksum = (~checksum);
-            hal_printf ("%02X\r\n",checksum+1);
+            hal_printf ("%02X\r\n",(uint8_t)(checksum+1));
             checksum = 0;
         }
     }
@@ -453,12 +454,35 @@ void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
         upper_address = strtoul (szUpper,NULL,16)&0xff;
     }
 }
+void zdi_cpu_instruction_out0 (uint8_t regnr, uint8_t value)
+{
+    uint8_t instructions[3];
+    instructions[0]=value;
+    instructions[1]=0x3e;
+    zdi_write_registers (ZDI_IS1,2,instructions);
+
+    instructions[0]=regnr;
+    instructions[1]=0x39;
+    instructions[2]=0xed;
+    zdi_write_registers (ZDI_IS2,3,instructions);
+}
+void zdi_cpu_instruction_sp (uint32_t value)
+{
+    zdi_write_cpu (REG_SP,value);
+}
+void zdi_cpu_instruction_di ()
+{
+    zdi_write_register (ZDI_IS0,0xf3);
+}
+
 void zdi_process_line ()
 {
     switch (szLine[0])
     {
         case 'h':
             hal_printf ("\r\nh               - this help message");
+            hal_printf ("\r\ni               - bring EZ80 to an initialized state");
+            hal_printf ("\r\na / z           - switch to ADL or Z80 mode");
             hal_printf ("\r\nb               - break the program");
             hal_printf ("\r\nb address       - set breakpoint at hex address");
             hal_printf ("\r\nd nr            - unset breakpoint");
@@ -522,7 +546,7 @@ void zdi_process_line ()
                 if (!already_breaked)
                 {
                     hal_printf ("\r\n(jumping to 0x%06X)\r\n#",address);
-                    zdi_debug_continue();
+                    zdi_debug_continue();  
                 }
                 else
                 {
@@ -606,6 +630,36 @@ void zdi_process_line ()
             }
             else
                 hal_printf ("\r\n(wrong Intel Hex format)\r\n#");
+            break;
+        case 'a':
+            zdi_debug_break ();
+            zdi_read_cpu (SET_ADL);
+            zdi_debug_status (BREAK);
+            break;
+        case 'z':
+            zdi_debug_break ();
+            zdi_read_cpu (RESET_ADL);
+            zdi_debug_status (BREAK);
+            break;
+        case 'i':
+            zdi_debug_break ();
+            zdi_read_cpu (SET_ADL);
+            zdi_cpu_instruction_di ();
+            // configure internal flash
+            zdi_cpu_instruction_out0 (FLASH_ADDR_U,0x00);
+            zdi_cpu_instruction_out0 (FLASH_CTRL,0b00101000);   // flash enabled, 1 wait state
+            // configure internal RAM chip-select range
+            zdi_cpu_instruction_out0 (RAM_ADDR_U,0xbc);         // configure internal RAM chip-select range
+            zdi_cpu_instruction_out0 (RAM_CTL,0b10000000);      // enable
+            // configure external RAM chip-select range
+            zdi_cpu_instruction_out0 (CS0_LBR,0x04);            // lower boundary
+            zdi_cpu_instruction_out0 (CS0_UBR,0x0b);            // upper boundary
+            zdi_cpu_instruction_out0 (CS0_BMC,0b00000001);      // 1 wait-state, ez80 mode
+            zdi_cpu_instruction_out0 (CS0_CTL,0b00001000);      // memory chip select, cs0 enabled
+            // set stack pointer
+            zdi_write_cpu (REG_SP,0x0BFFFF);
+            // show status
+            zdi_debug_status (BREAK);
             break;
         default:
             hal_printf ("\r\n(unknown command)\r\n#");

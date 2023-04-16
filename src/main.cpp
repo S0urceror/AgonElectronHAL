@@ -183,6 +183,9 @@ void loop()
                             c=((byte) ez80_serial.read());
                             switch (c)
                             {
+                                case 0x80: // general poll
+                                    mos_send_general_poll ();
+                                    break;
                                 case 0x86: // VDP_MODE
                                     mos_send_vdp_mode ();
                                     break;

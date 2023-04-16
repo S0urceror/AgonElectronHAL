@@ -51,6 +51,16 @@
 #define ZDI_BUS_STAT    0x17
 #define ZDI_RD_MEM      0x20
 
+// EZ80 registers
+#define FLASH_ADDR_U    0xf7
+#define FLASH_CTRL      0xf8
+#define RAM_ADDR_U      0xb5
+#define RAM_CTL         0xb4
+#define CS0_LBR         0xa8
+#define CS0_UBR         0xa9
+#define CS0_BMC         0xf0
+#define CS0_CTL         0xaa
+
 // CPU read/write values
 typedef enum 
 {
