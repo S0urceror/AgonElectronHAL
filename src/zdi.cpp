@@ -20,24 +20,28 @@ uint8_t charcnt = 0;
 ///////////////////////
 void zdi_start ()
 {
-    digitalWrite (ZDI_TDI,HIGH);
-    pinMode (ZDI_TDI, OUTPUT);
-
+    // TCK
     digitalWrite (ZDI_TCK,HIGH);
     usleep (ZDI_WAIT_MICRO);
-    // start signal
+    // TDI
     digitalWrite (ZDI_TDI,LOW);
+    pinMode (ZDI_TDI, OUTPUT);
     usleep (ZDI_WAIT_MICRO);
+
+    // TCK: xx^^^^^^^^^
+    // TDI: x^^^\\*____
 }
 void zdi_write_bit (bool bit)
 {
-    pinMode (ZDI_TDI, OUTPUT);
-    usleep (ZDI_WAIT_MICRO);
-
+    // TCK: ^\\___*//^^
+    // TDI: xxxxxBBBBBB
     digitalWrite (ZDI_TCK,LOW);
     usleep (ZDI_WAIT_MICRO);
+    //
     digitalWrite (ZDI_TDI,bit);
+    pinMode (ZDI_TDI, OUTPUT);
     usleep (ZDI_WAIT_MICRO);
+    //
     digitalWrite (ZDI_TCK,HIGH);
     usleep (ZDI_WAIT_MICRO);
 }
@@ -45,16 +49,17 @@ bool zdi_read_bit ()
 {
     bool bit;
 
-    pinMode (ZDI_TDI, INPUT);
-    usleep (ZDI_WAIT_MICRO);
-
+    // TCK: ^\\*___//^^
+    // TDI: xxxxBBBBBBB
     digitalWrite (ZDI_TCK,LOW);
     usleep (ZDI_WAIT_MICRO);
+    //
+    pinMode (ZDI_TDI, INPUT);
     bit = digitalRead (ZDI_TDI);
     usleep (ZDI_WAIT_MICRO);
+    //
     digitalWrite (ZDI_TCK,HIGH);
     usleep (ZDI_WAIT_MICRO);
-
     return bit;
 }
 void zdi_register (byte regnr,bool read)
@@ -97,7 +102,11 @@ byte zdi_read ()
 byte zdi_read_register (byte regnr)
 {
     byte value;
+    // TCK: xx\\*__//^^
+    // TDI: xxxxxBBBBBB
 
+    // TCK: xx^^^^^^^^ xxx___*//^^ ^^^___*//^^ ^^^___*//^^ ^^^___*//^^ ^^\\*__//^^
+    // TDI: x^^^\\*___ xxxxxBBBBBB xxxxxBBBBBB xxxxxBBBBBB xxxxxBBBBBB xxxxxBBBBBB
     zdi_start ();
     zdi_register (regnr,ZDI_READ);
     zdi_separator (ZDI_CMD_CONTINUE);
@@ -179,7 +188,7 @@ void zdi_write_cpu (rw_control_t rw,uint32_t value)
     zdi_write_registers (ZDI_WR_DATA_L,3,values);
     zdi_write_register (ZDI_RW_CTL,rw | 0b10000000); // set high bit to indicate write
 }
-void zdi_read_memory (uint32_t address,uint32_t count, byte* memory)
+void zdi_read_memory (uint32_t address,uint16_t count, byte* memory)
 {
     byte* ptr = memory;
     // set start address
@@ -188,7 +197,7 @@ void zdi_read_memory (uint32_t address,uint32_t count, byte* memory)
     zdi_start ();
     zdi_register (ZDI_RD_MEM,ZDI_READ);
     // one by one
-    for (uint32_t i=0;i<count;i++)
+    for (int i=0;i<count;i++)
     {
         zdi_separator (ZDI_CMD_CONTINUE);
         *(ptr++) = zdi_read ();
@@ -333,7 +342,7 @@ void zdi_debug_status (debug_state_t state)
                                                     status&0b00001000?'I':'.',
                                                     pc,
                                                     mbase);        
-
+/*
     // show register contents
     if (status & 0b10000000) // stopped at a breakpoint
     {
@@ -342,6 +351,7 @@ void zdi_debug_status (debug_state_t state)
         hal_printf ("\r\n%06X %02X %02X %02X %02X %02X %02X %02X %02X",pc,mem[0],mem[1],mem[2],mem[3],mem[4],mem[5],mem[6],mem[7]);
         zdi_write_cpu (REG_PC,pc);
     }
+*/
     // show state
     const char* prompt;
     switch (state)
@@ -456,22 +466,20 @@ void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
 }
 void zdi_cpu_instruction_out0 (uint8_t regnr, uint8_t value)
 {
+    // ld a, nn
     uint8_t instructions[3];
     instructions[0]=value;
     instructions[1]=0x3e;
     zdi_write_registers (ZDI_IS1,2,instructions);
-
+    // out0 (nn),a
     instructions[0]=regnr;
     instructions[1]=0x39;
     instructions[2]=0xed;
     zdi_write_registers (ZDI_IS2,3,instructions);
 }
-void zdi_cpu_instruction_sp (uint32_t value)
-{
-    zdi_write_cpu (REG_SP,value);
-}
 void zdi_cpu_instruction_di ()
 {
+    // di
     zdi_write_register (ZDI_IS0,0xf3);
 }
 
@@ -578,7 +586,7 @@ void zdi_process_line ()
                 char* pStart = szLine+2;
                 char* pSize;
                 u32_t address=strtoul (pStart,&pSize,16);
-                u16_t size=16;
+                u16_t size=LINE_LENGTH;
                 if (*pSize != '\0')
                     size = strtoul (pSize,NULL,16);
 
@@ -660,6 +668,9 @@ void zdi_process_line ()
             zdi_write_cpu (REG_SP,0x0BFFFF);
             // show status
             zdi_debug_status (BREAK);
+            break;
+        case 't':
+            // test code
             break;
         default:
             hal_printf ("\r\n(unknown command)\r\n#");
