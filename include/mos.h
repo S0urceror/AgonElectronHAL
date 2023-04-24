@@ -12,5 +12,8 @@ void mos_send_cursor_pos ();
 void mos_col_left ();
 void mos_col_right ();
 void mos_set_column (uint8_t col);
+void mos_send_character (byte ch);
+void mos_send_virtual_key (fabgl::VirtualKeyItem item);
+void mos_handle_escape_code ();
 
 #endif

@@ -11,9 +11,12 @@
 #include "fabgl.h"
 #include "hal.h"
 #include "zdi.h"
+#ifdef MOS_COMPATIBILITY
+#pragma message ("Building MOS compatible version of Electron HAL")
 #include "mos.h"
-
-#define SERIALKB 1
+#else
+#pragma message ("Building a Electron OS compatible version of Electron HAL")
+#endif
 
 fabgl::PS2Controller    PS2Controller;
 fabgl::VGA16Controller  DisplayController;
@@ -26,10 +29,6 @@ void do_keys_hostpc ()
     // characters in the buffer?
     if((ch=hal_hostpc_serial_read())>0) 
     {
-		byte packet[] = {
-			ch,
-			0,
-		};
         if (!zdi_mode() && ch==0x1a) 
         {
             // CTRL-Z?
@@ -41,8 +40,13 @@ void do_keys_hostpc ()
                 // handle keys on the ESP32
                 zdi_process_cmd (ch);
             else
-                // send to MOS on the EZ80
-		        mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
+            {
+                #ifdef MOS_COMPATIBILITY
+                mos_send_character (ch);
+                #else
+                ez80_serial.write(ch);
+                #endif
+            }
         }
 	} 
 }
@@ -51,8 +55,6 @@ void do_keys_ps2 ()
 {
     fabgl::Keyboard *kb = PS2Controller.keyboard();
     fabgl::VirtualKeyItem item;
-    byte keycode = 0;						// Last pressed key code
-    byte modifiers = 0;						// Last pressed key modifiers
     
     if(kb->getNextVirtualKey(&item, 0)) 
     {
@@ -72,24 +74,11 @@ void do_keys_ps2 ()
             }
             else
             {
-                // send to MOS on the EZ80
-                modifiers = 
-                    item.CTRL		<< 0 |
-                    item.SHIFT		<< 1 |
-                    item.LALT		<< 2 |
-                    item.RALT		<< 3 |
-                    item.CAPSLOCK	<< 4 |
-                    item.NUMLOCK	<< 5 |
-                    item.SCROLLLOCK << 6 |
-                    item.GUI		<< 7
-                ;
-                byte packet[] = {
-                    item.ASCII,
-                    modifiers,
-                    item.vk,
-                    item.down,
-                };
-                mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
+                #ifdef MOS_COMPATIBILITY
+                mos_send_virtual_key (item);
+                #else
+                ez80_serial.write(item.ASCII);
+                #endif
             }
         }
     }
@@ -102,11 +91,12 @@ void boot_screen()
     terminal.write("\e[2J");     // clear screen
     terminal.write("\e[1;1H");   // move cursor to 1,1
 
-    hal_printf("Electron - HAL - version 0.0.1\r\n");
+    hal_printf("Electron - HAL - version 0.0.2\r\n");
+    #ifdef MOS_COMPATIBILITY
+    hal_printf("MOS RC4 support, not yet fully compatible\r\n\n");
+    #else
     hal_printf("a playful alternative to Quark\r\n\n");
-
-    // stop MOS boot wait by sending ESC key
-    mos_init ();
+    #endif
 }
 
 void setup()
@@ -137,6 +127,11 @@ void loop()
 {
     boot_screen();
 
+    // stop MOS boot wait by sending ESC key
+    #ifdef MOS_COMPATIBILITY
+    mos_init ();
+    #endif
+
     while (1)
     {
         do_keys_ps2();
@@ -156,7 +151,9 @@ void loop()
             {
                 // normal ASCII?
                 hal_printf ("%c",c);
+                #ifdef MOS_COMPATIBILITY
                 mos_col_right();
+                #endif
             }
             else
             {
@@ -165,41 +162,29 @@ void loop()
                 {
                     case '\r':
                     case '\n':
+                        #ifdef MOS_COMPATIBILITY
                         mos_set_column (1);
+                        #endif
                     case 0x09: // ??
                         hal_printf ("%c",c);
                         break;
                     case 0x08: // backspace
+                        #ifdef MOS_COMPATIBILITY
                         mos_col_left ();
+                        #endif
                         hal_printf ("%c %c",c,c);
                         break;
                     case 0x0c: // formfeed
                         terminal.clear ();
+                        #ifdef MOS_COMPATIBILITY
                         mos_set_column (1);
+                        #endif
                         break;
-                    case 23: // MOS escape code
-                        if ((c=ez80_serial.read())==0)
-                        {
-                            c=((byte) ez80_serial.read());
-                            switch (c)
-                            {
-                                case 0x80: // general poll
-                                    mos_send_general_poll ();
-                                    break;
-                                case 0x86: // VDP_MODE
-                                    mos_send_vdp_mode ();
-                                    break;
-                                case 0x82: // VDP_CURSOR
-                                    mos_send_cursor_pos ();
-                                    break;
-                                default:
-                                    hal_printf ("VDP:0x%02X;",c);
-                                    break;
-                            }
-                        }
-                        else
-                            hal_printf ("MOS:0x%02X;",c);
+                    #ifdef MOS_COMPATIBILITY
+                    case 0x17: // MOS escape code 23
+                        mos_handle_escape_code ();
                         break;
+                    #endif
                     default:
                         hal_printf ("ERR:0x%02X;",c);
                         break;

@@ -364,7 +364,7 @@ void zdi_debug_status (debug_state_t state)
 }
 
 #define LINE_LENGTH 0x20
-void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size)
+void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size,bool first, bool last)
 {
     uint8_t checksum=0;
     for (int i=0;i<size;i++)
@@ -392,7 +392,8 @@ void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size)
             checksum = 0;
         }
     }
-    hal_printf (":00000001FF\r\n#");
+    if (last)
+        hal_printf (":00000001FF\r\n#");
 }
 bool cpu_was_at_breakpoint = false;
 void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
@@ -570,7 +571,7 @@ void zdi_process_line ()
             if (charcnt>2)
             {
                 hal_printf ("\r\n");
-                upper_address = 0x00;
+                upper_address = 0xff;
 
                 // break cpu
                 bool already_breaked = false;
@@ -582,7 +583,7 @@ void zdi_process_line ()
                 // get pc
                 uint32_t pc = zdi_read_cpu (REG_PC);
 
-                // read memory
+                // get requested address + size
                 char* pStart = szLine+2;
                 char* pSize;
                 u32_t address=strtoul (pStart,&pSize,16);
@@ -590,9 +591,22 @@ void zdi_process_line ()
                 if (*pSize != '\0')
                     size = strtoul (pSize,NULL,16);
 
-                byte* mem = (byte*) malloc (size);
-                zdi_read_memory (address,size,mem);
-                zdi_bin_to_intel_hex (mem,address,size);
+                // read memory in chunks of LINE_LENGTH
+                bool first = true;
+                bool last = false;
+                uint16_t chunk = (size>LINE_LENGTH?LINE_LENGTH:size);
+                byte* mem = (byte*) malloc (chunk);
+                while (size>0)
+                {
+                    if (size<=chunk)
+                        last = true;
+                    zdi_read_memory (address,chunk,mem);
+                    address+=chunk;
+                    size-=chunk;
+                    zdi_bin_to_intel_hex (mem,address,chunk,first,last);
+                    if (first)
+                        first = false;
+                }
                 free (mem);
 
                 // restore pc
