@@ -16,17 +16,11 @@ void mos_init ()
 {
     col=1;
     row=1;
-
-    // send ESC to EZ80
-    ez80_serial.write(27);
 }
 
 // Send a packet of data to the MOS
 //
 void mos_send_packet(byte code, byte len, byte data[]) {
-    // wait for CTS
-    while (!getCTSStatus());
-
     ez80_serial.write(code + 0x80);
     ez80_serial.write(len);
     for(int i = 0; i < len; i++) {

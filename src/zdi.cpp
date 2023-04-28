@@ -288,7 +288,7 @@ void zdi_enter ()
     memset (szLine,0,sizeof(szLine));
     charcnt=0;
     upper_address = 0x00;
-    debug_flags = 0x00;
+    //debug_flags = 0x00;
 
     zdi_mode_flag = true;
     digitalWrite (ZDI_TCK,HIGH);
@@ -305,7 +305,10 @@ void zdi_exit ()
 
     // back to running mode if we are at breakpoint
     if (zdi_debug_breakpoint_reached())
-        zdi_debug_continue ();
+        hal_printf ("\r\n(exiting, breakpoint active)\r\n");
+        //zdi_debug_continue ();
+    else
+        hal_printf ("\r\n(exiting)\r\n");
 
     zdi_mode_flag = false;
     hal_printf ("\r\n*");
@@ -342,7 +345,7 @@ void zdi_debug_status (debug_state_t state)
                                                     status&0b00001000?'I':'.',
                                                     pc,
                                                     mbase);        
-/*
+
     // show register contents
     if (status & 0b10000000) // stopped at a breakpoint
     {
@@ -351,7 +354,7 @@ void zdi_debug_status (debug_state_t state)
         hal_printf ("\r\n%06X %02X %02X %02X %02X %02X %02X %02X %02X",pc,mem[0],mem[1],mem[2],mem[3],mem[4],mem[5],mem[6],mem[7]);
         zdi_write_cpu (REG_PC,pc);
     }
-*/
+
     // show state
     const char* prompt;
     switch (state)
@@ -478,6 +481,18 @@ void zdi_cpu_instruction_out0 (uint8_t regnr, uint8_t value)
     instructions[2]=0xed;
     zdi_write_registers (ZDI_IS2,3,instructions);
 }
+void zdi_cpu_instruction_out (uint8_t regnr, uint8_t value)
+{
+    // ld a, nn
+    uint8_t instructions[2];
+    instructions[0]=value;
+    instructions[1]=0x3e;
+    zdi_write_registers (ZDI_IS1,2,instructions);
+    // out0 (nn),a
+    instructions[0]=regnr;
+    instructions[1]=0xd3;
+    zdi_write_registers (ZDI_IS2,2,instructions);
+}
 void zdi_cpu_instruction_di ()
 {
     // di
@@ -601,9 +616,9 @@ void zdi_process_line ()
                     if (size<=chunk)
                         last = true;
                     zdi_read_memory (address,chunk,mem);
+                    zdi_bin_to_intel_hex (mem,address,chunk,first,last);
                     address+=chunk;
                     size-=chunk;
-                    zdi_bin_to_intel_hex (mem,address,chunk,first,last);
                     if (first)
                         first = false;
                 }
@@ -667,17 +682,50 @@ void zdi_process_line ()
             zdi_debug_break ();
             zdi_read_cpu (SET_ADL);
             zdi_cpu_instruction_di ();
+            // configure default GPIO
+            zdi_cpu_instruction_out (PB_DDR, 0xff);
+            zdi_cpu_instruction_out (PC_DDR, 0xff);
+            zdi_cpu_instruction_out (PD_DDR, 0xff);
+            zdi_cpu_instruction_out (PB_ALT1, 0x0);
+            zdi_cpu_instruction_out (PC_ALT1, 0x0);
+            zdi_cpu_instruction_out (PD_ALT1, 0x0);
+            zdi_cpu_instruction_out (PB_ALT2, 0x0);
+            zdi_cpu_instruction_out (PC_ALT2, 0x0);
+            zdi_cpu_instruction_out (PD_ALT2, 0x0);
+            // timers
+            zdi_cpu_instruction_out (TMR0_CTL, 0x0);
+            zdi_cpu_instruction_out (TMR1_CTL, 0x0);
+            zdi_cpu_instruction_out (TMR2_CTL, 0x0);
+            zdi_cpu_instruction_out (TMR3_CTL, 0x0);
+            zdi_cpu_instruction_out (TMR4_CTL, 0x0);
+            zdi_cpu_instruction_out (TMR5_CTL, 0x0);
+            // uart interrupts
+            zdi_cpu_instruction_out (UART0_IER, 0x0);
+            zdi_cpu_instruction_out (UART1_IER, 0x0);
+            // I2C / Flash / SPI / RTC
+            zdi_cpu_instruction_out (I2C_CTL, 0x0);
+            zdi_cpu_instruction_out (FLASH_IRQ, 0x0);
+            zdi_cpu_instruction_out (SPI_CTL, 0x4);
+            zdi_cpu_instruction_out (RTC_CTRL, 0x0);
+
             // configure internal flash
-            zdi_cpu_instruction_out0 (FLASH_ADDR_U,0x00);
-            zdi_cpu_instruction_out0 (FLASH_CTRL,0b00101000);   // flash enabled, 1 wait state
+            zdi_cpu_instruction_out (FLASH_ADDR_U,0x00);
+            zdi_cpu_instruction_out (FLASH_CTRL,0b00101000);   // flash enabled, 1 wait state
             // configure internal RAM chip-select range
-            zdi_cpu_instruction_out0 (RAM_ADDR_U,0xbc);         // configure internal RAM chip-select range
-            zdi_cpu_instruction_out0 (RAM_CTL,0b10000000);      // enable
+            zdi_cpu_instruction_out (RAM_ADDR_U,0xbc);         // configure internal RAM chip-select range
+            zdi_cpu_instruction_out (RAM_CTL,0b10000000);      // enable
             // configure external RAM chip-select range
-            zdi_cpu_instruction_out0 (CS0_LBR,0x04);            // lower boundary
-            zdi_cpu_instruction_out0 (CS0_UBR,0x0b);            // upper boundary
-            zdi_cpu_instruction_out0 (CS0_BMC,0b00000001);      // 1 wait-state, ez80 mode
-            zdi_cpu_instruction_out0 (CS0_CTL,0b00001000);      // memory chip select, cs0 enabled
+            zdi_cpu_instruction_out (CS0_LBR,0x04);            // lower boundary
+            zdi_cpu_instruction_out (CS0_UBR,0x0b);            // upper boundary
+            zdi_cpu_instruction_out (CS0_BMC,0b00000001);      // 1 wait-state, ez80 mode
+            zdi_cpu_instruction_out (CS0_CTL,0b00001000);      // memory chip select, cs0 enabled
+
+            // configure external RAM chip-select range
+            zdi_cpu_instruction_out (CS1_CTL,0x00);            // memory chip select, cs1 disabled
+            // configure external RAM chip-select range
+            zdi_cpu_instruction_out (CS2_CTL,0x00);            // memory chip select, cs2 disabled
+            // configure external RAM chip-select range
+            zdi_cpu_instruction_out (CS3_CTL,0x00);            // memory chip select, cs3 disabled
             // set stack pointer
             zdi_write_cpu (REG_SP,0x0BFFFF);
             // show status

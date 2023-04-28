@@ -15,26 +15,9 @@ fabgl::Terminal* fabgl_terminal;
 void hal_ez80_serial_init ()
 {
 	ez80_serial.end();
-    ez80_serial.setRxBufferSize(1024);
     ez80_serial.begin(UART_BR, SERIAL_8N1, UART_RX, UART_TX);
-    ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_RTS, 64);			// Can be called whenever
-	ez80_serial.setPins(UART_NA, UART_NA, UART_CTS, UART_RTS);	// Must be called after begin
-    pinMode(UART_RTS, OUTPUT);
-    pinMode(UART_CTS, INPUT);	
-    setRTSStatus(true);
-}
-
-// Set the RTS line value
-//
-void setRTSStatus(bool value) {
-	digitalWrite(UART_RTS, value ? LOW : HIGH);		// Asserts when LOW
-}
-
-bool getCTSStatus ()
-{
-    // TODO: full hw handshake support
-    return true;
-    return digitalRead (UART_CTS)&0b1;
+	ez80_serial.setPins(UART_RX, UART_TX, UART_CTS, UART_RTS);	// Must be called after begin
+	ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_CTS_RTS);			// Can be called whenever
 }
 
 void hal_hostpc_serial_init (fabgl::Terminal* term)

@@ -7,15 +7,15 @@
 
 #define ez80_serial Serial2
 
-#define UART_BR     1152000
-#define UART_NA     -1
-#define UART_TX     2
-#define UART_RX     34
-#define UART_RTS    13 // The ESP32 RTS pin
-#define UART_CTS    14 // The ESP32 CTS pin
-#define UART_RX_THRESH			128		// Point at which RTS is toggled
+#define UART_BR         1152000
+#define UART_NA         -1
+#define UART_TX         2
+#define UART_RX         34
+#define UART_RTS        13 // The ESP32 RTS pin
+#define UART_CTS        14 // The ESP32 CTS pin
+#define UART_RX_THRESH	64 // Point at which RTS is toggled
 
-#define GPIO_ITRP   17 // VSync Interrupt Pin - for reference only
+#define GPIO_ITRP       17 // VSync Interrupt Pin - for reference only
 
 const byte PACKET_KEYCODE	= 0x01;	// Keyboard data
 const byte PACKET_SCRCHAR   = 0x03;
@@ -30,8 +30,5 @@ void hal_printf (const char* format, ...);
 void hal_hostpc_serial_init (fabgl::Terminal*);
 char hal_hostpc_serial_read ();
 void hal_ez80_serial_init ();
-
-void setRTSStatus(bool value);
-bool getCTSStatus ();
 
 #endif

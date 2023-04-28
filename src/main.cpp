@@ -41,10 +41,58 @@ void do_keys_hostpc ()
                 zdi_process_cmd (ch);
             else
             {
+                /*
+                if (ch=='+') 
+                {
+                    int amount = 65536;
+                    hal_printf ("Sending %d bytes (R=receive, E=error): \r\n",amount);
+                    long int t1 = millis();
+                    for (int cnt=0;cnt<amount;cnt++)
+                        ez80_serial.write ((byte)cnt);
+                    long int t2 = millis();
+                    hal_printf ("This took: %ld milliseconds\r\n",t2-t1);
+                    hal_printf ("Send speed: %ld bits/sec\r\n",((amount*8*1000) / (t2-t1)));
+                }
+                else if  (ch=='-')
+                {
+                    int amount = 0;
+                    bool firsttime = true;
+                    hal_printf ("Receiving byte stream\r\n");
+                    ez80_serial.write ('\0');
+                    ez80_serial.write ('\0');
+                    long int t1 = millis();
+                    byte b = 0;
+                    while (!ez80_serial.available());
+                    while (true)
+                    {
+                        ch = ez80_serial.read();
+                        if (ch==0)
+                        {
+                            b=0;
+                            if (firsttime)
+                                firsttime = false;
+                            else
+                                break;
+                        }
+                        else
+                            firsttime = true;
+                        if (ch!=b)
+                            hal_printf ("E");
+                        b++;
+                        amount++;
+
+                    }
+                    long int t2 = millis();
+                    hal_printf ("Received %d bytes\r\n",amount);
+                    hal_printf ("This took: %ld milliseconds\r\n",t2-t1);
+                    hal_printf ("Receive speed: %ld bits/sec\r\n",((amount*8*1000) / (t2-t1)));
+                }
+                else
+                */
                 #ifdef MOS_COMPATIBILITY
-                mos_send_character (ch);
+                    mos_send_character (ch);
                 #else
-                ez80_serial.write(ch);
+                    ez80_serial.write(ch);
                 #endif
             }
         }
@@ -77,7 +125,8 @@ void do_keys_ps2 ()
                 #ifdef MOS_COMPATIBILITY
                 mos_send_virtual_key (item);
                 #else
-                ez80_serial.write(item.ASCII);
+                if (item.down)
+                    ez80_serial.write(item.ASCII);
                 #endif
             }
         }
@@ -140,11 +189,6 @@ void loop()
         // ez80 has send us something
         if (ez80_serial.available() > 0)
         {
-            // larger then buffer?
-            if(ez80_serial.available() > UART_RX_THRESH) {
-                // please stop sending
-                setRTSStatus(false);		
-            }
             // read character
             byte c = ez80_serial.read();
             if (c>=0x20 && c<0x80) 
@@ -190,11 +234,6 @@ void loop()
                         break;
                 }
             }
-        }
-        else 
-        {
-            // yes we can receive more
-            setRTSStatus(true);
         }
     }
 }
