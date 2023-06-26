@@ -24,6 +24,7 @@ void hal_hostpc_serial_init (fabgl::Terminal* term)
 {   
     fabgl_terminal = term;
 	host_serial.begin(115200, SERIAL_8N1, 3, 1);
+	//host_serial.begin(460800, SERIAL_8N1, 3, 1);
 }
 // print both on the Terminal and the connecting Host via serial (if any)
 void hal_printf (const char* format, ...) {

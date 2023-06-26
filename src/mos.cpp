@@ -10,6 +10,8 @@
 
 #include "mos.h"
 
+#ifdef MOS_COMPATIBILITY
+
 uint8_t col,row;
 
 void mos_init ()
@@ -131,3 +133,5 @@ void mos_handle_escape_code ()
 
     
 }
+
+#endif

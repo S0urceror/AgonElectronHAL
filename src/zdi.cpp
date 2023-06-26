@@ -15,6 +15,7 @@ bool zdi_mode_flag = false;
 uint8_t upper_address = 0x00;
 char szLine[80];
 uint8_t charcnt = 0;
+bool ihexmode = false;
 
 // low-level bit stream
 ///////////////////////
@@ -284,6 +285,7 @@ bool zdi_mode ()
 }
 void zdi_enter ()
 {
+    ihexmode = false;
     // clear line buffer
     memset (szLine,0,sizeof(szLine));
     charcnt=0;
@@ -300,12 +302,14 @@ void zdi_enter ()
 void zdi_exit ()
 {
     // remove all breakpoints
-    for (uint8_t i=0;i<4;i++)
-        zdi_debug_breakpoint_disable (i);
+    //for (uint8_t i=0;i<zdi_available_break_point();i++)
+    //    zdi_debug_breakpoint_disable (i);
+    if (zdi_available_break_point()>0)
+        hal_printf ("\r\n(exiting, breakpoint active)\r\n");
 
     // back to running mode if we are at breakpoint
     if (zdi_debug_breakpoint_reached())
-        hal_printf ("\r\n(exiting, breakpoint active)\r\n");
+        hal_printf ("\r\n(exiting, break active)\r\n");
         //zdi_debug_continue ();
     else
         hal_printf ("\r\n(exiting)\r\n");
@@ -319,7 +323,10 @@ void zdi_exit ()
 void zdi_debug_status (debug_state_t state)
 {
     byte mem[8];
+    // cpu status
+    uint8_t status = zdi_get_cpu_status ();
     // read register contents
+    zdi_read_cpu (SET_ADL);
     uint32_t pc = zdi_read_cpu (REG_PC);
     uint32_t af = zdi_read_cpu (REG_AF);
     uint8_t f = (af>>8) &0xff;
@@ -329,10 +336,14 @@ void zdi_debug_status (debug_state_t state)
     uint32_t hl = zdi_read_cpu (REG_HL);
     uint32_t ix = zdi_read_cpu (REG_IX);
     uint32_t iy = zdi_read_cpu (REG_IY);
-    uint32_t sp = zdi_read_cpu (REG_SP);
-    uint8_t status = zdi_get_cpu_status ();
-    hal_printf ("\r\nA=%02X BC=%06X DE=%06X HL=%06X IX=%06X IY=%06X SP=%06X", af & 0xff,bc,de,hl,ix,iy,sp);
-    hal_printf ("\r\nFlags=%c%c%c%c%c%c Status=%c%c%c%c PC=%06X MBASE=%02X",
+    uint32_t spl = zdi_read_cpu (REG_SP);
+    zdi_read_cpu (RESET_ADL);
+    uint16_t sps = zdi_read_cpu (REG_SP);
+    if (status&0b00010000)
+        zdi_read_cpu (SET_ADL);
+    
+    hal_printf ("\r\nA=%02X BC=%06X DE=%06X HL=%06X IX=%06X IY=%06X SPL=%06X", af & 0xff,bc,de,hl,ix,iy,spl);
+    hal_printf ("\r\nFlags=%c%c%c%c%c%c Status=%c%c%c%c%c PC=%06X MBASE=%02X           SPS=%04X",
                                                     f&0b10000000?'P':'N',
                                                     f&0b01000000?'Z':'.',
                                                     f&0b00010000?'H':'.',
@@ -340,11 +351,13 @@ void zdi_debug_status (debug_state_t state)
                                                     f&0b00000010?'A':'S',
                                                     f&0b00000001?'C':'.',
                                                     status&0b10000000?'Z':'.',
+                                                    status&0b00100000?'H':'.',
                                                     status&0b00010000?'A':'.',
                                                     status&0b00001000?'M':'.',
                                                     status&0b00001000?'I':'.',
                                                     pc,
-                                                    mbase);        
+                                                    mbase,
+                                                    sps);        
 
     // show register contents
     if (status & 0b10000000) // stopped at a breakpoint
@@ -439,10 +452,13 @@ void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
         check = (~check);
         check++;
         if (check != checksum)
-            hal_printf (" !");
+            hal_printf ("!");
         else
+        {
+            hal_printf (".");
             // write to ez80 and free memory
             zdi_write_memory (address,len,memory);
+        }
 
         free (memory);
 
@@ -504,18 +520,20 @@ void zdi_process_line ()
     switch (szLine[0])
     {
         case 'h':
-            hal_printf ("\r\nh               - this help message");
-            hal_printf ("\r\ni               - bring EZ80 to an initialized state");
-            hal_printf ("\r\na / z           - switch to ADL or Z80 mode");
-            hal_printf ("\r\nb               - break the program");
-            hal_printf ("\r\nb address       - set breakpoint at hex address");
-            hal_printf ("\r\nd nr            - unset breakpoint");
-            hal_printf ("\r\nc               - continue the program");
-            hal_printf ("\r\ns               - step by step");
-            hal_printf ("\r\nr               - show registers and status");
-            hal_printf ("\r\nj address       - jump to address");
-            hal_printf ("\r\nx address size  - examine memory from address");
-            hal_printf ("\r\n:0123456789ABCD - data in Intel Hex format");
+            hal_printf ("\r\nh                              - this help message");
+            hal_printf ("\r\ni                              - bring EZ80 to an initialized state");
+            hal_printf ("\r\na / z                          - switch to ADL or Z80 mode");
+            hal_printf ("\r\nb                              - break the program");
+            hal_printf ("\r\nb address                      - set breakpoint at hex address");
+            hal_printf ("\r\nd nr                           - unset breakpoint");
+            hal_printf ("\r\nc                              - continue the program");
+            hal_printf ("\r\ns                              - step by step");
+            hal_printf ("\r\nr                              - show registers and status");
+            hal_printf ("\r\nR                              - reset CPU");
+            hal_printf ("\r\nj address                      - jump to address");
+            hal_printf ("\r\nx address [size]               - examine memory from address");
+            hal_printf ("\r\n:0123456789ABCD                - write to memory in Intel Hex");
+            hal_printf ("\r\nw begin end start filename.bin - ez80 to write memory to file");
             hal_printf ("\r\n#");
             break;
         case 'b':
@@ -649,6 +667,9 @@ void zdi_process_line ()
             else
                 zdi_debug_status (RUN);
             break;
+        case 'R':
+            zdi_reset ();
+            break;
         case 's':
         case '\0':
             if (zdi_debug_breakpoint_reached()) // breakpoint?
@@ -663,7 +684,7 @@ void zdi_process_line ()
             if (charcnt>=1+2+4+2+2)
             {
                 zdi_intel_hex_to_bin (szLine,charcnt);
-                hal_printf ("\r\n#");
+                //hal_printf ("\r\n#");
             }
             else
                 hal_printf ("\r\n(wrong Intel Hex format)\r\n#");
@@ -731,8 +752,35 @@ void zdi_process_line ()
             // show status
             zdi_debug_status (BREAK);
             break;
-        case 't':
-            // test code
+        case 'w':
+            // send write memory command to EZ80
+            // get requested address + size
+            char* pBegin;
+            char* pEnd;
+            char *pStart;
+            char *pFilename;
+            u32_t begin,end,start;
+            pBegin = szLine+2;
+            begin=strtoul (pBegin,&pEnd,16);
+            if (*pEnd == '\0')
+            {
+                hal_printf ("\r\n(invalid syntax)\r\n#");
+                break;
+            }
+            end=strtoul (pEnd,&pStart,16);
+            if (*pStart == '\0')
+            {
+                hal_printf ("\r\n(invalid syntax)\r\n#");
+                break;
+            }
+            start=strtoul (pStart,&pFilename,16);
+            if (*pFilename == '\0')
+            {
+                hal_printf ("\r\n(invalid syntax)\r\n#");
+                break;
+            }
+            pFilename++;
+            hal_printf ("\r\nWriting memory from: %06X to: %06X starting: %06x to file: %s\r\n#",begin,end,start,pFilename);
             break;
         default:
             hal_printf ("\r\n(unknown command)\r\n#");
@@ -756,13 +804,18 @@ void zdi_process_cmd (uint8_t key)
             zdi_process_line ();
             memset (szLine,0,sizeof(szLine));
             charcnt=0;
+            if (ihexmode) 
+                ihexmode = false;
             break;
         case '\n': // newline
             // absorb
             break;
+        case ':':
+            ihexmode = true;
         default:
             // echo characters and add to line buffer
-            hal_printf ("%c",key);
+            if (!ihexmode)
+                hal_printf ("%c",key);
             if (charcnt<sizeof (szLine))
                 szLine[charcnt++]=key;
     }

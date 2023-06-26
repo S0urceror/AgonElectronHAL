@@ -16,6 +16,7 @@
 #include "mos.h"
 #else
 #pragma message ("Building a Electron OS compatible version of Electron HAL")
+#include "eos.h"
 #endif
 
 fabgl::PS2Controller    PS2Controller;
@@ -41,7 +42,8 @@ void do_keys_hostpc ()
                 zdi_process_cmd (ch);
             else
             {
-                /*
+                #ifdef HW_FLOW_CONTROL_TEST
+                // BAUDRATE and HW FLOW_CONTROL TEST
                 if (ch=='+') 
                 {
                     int amount = 65536;
@@ -88,7 +90,7 @@ void do_keys_hostpc ()
                     hal_printf ("Receive speed: %ld bits/sec\r\n",((amount*8*1000) / (t2-t1)));
                 }
                 else
-                */
+                #endif
                 #ifdef MOS_COMPATIBILITY
                     mos_send_character (ch);
                 #else
@@ -140,11 +142,9 @@ void boot_screen()
     terminal.write("\e[2J");     // clear screen
     terminal.write("\e[1;1H");   // move cursor to 1,1
 
-    hal_printf("Electron - HAL - version 0.0.2\r\n");
+    hal_printf("Electron - HAL - version %d.%d.%d\r\n",HAL_major,HAL_minor,HAL_revision);
     #ifdef MOS_COMPATIBILITY
-    hal_printf("MOS RC4 support, not yet fully compatible\r\n\n");
-    #else
-    hal_printf("a playful alternative to Quark\r\n\n");
+    hal_printf("\r\nLimited MOS RC4 support\r\n\n");
     #endif
 }
 
@@ -176,9 +176,13 @@ void loop()
 {
     boot_screen();
 
-    // stop MOS boot wait by sending ESC key
     #ifdef MOS_COMPATIBILITY
     mos_init ();
+    #else
+    if (!eos_wakeup ())
+    {
+        hal_printf ("Electron - OS - not running\r\n");
+    }
     #endif
 
     while (1)
@@ -209,14 +213,18 @@ void loop()
                         #ifdef MOS_COMPATIBILITY
                         mos_set_column (1);
                         #endif
-                    case 0x09: // ??
+                    case 0x07: // BELL
                         hal_printf ("%c",c);
                         break;
                     case 0x08: // backspace
+                    case 0x7f:
                         #ifdef MOS_COMPATIBILITY
                         mos_col_left ();
                         #endif
-                        hal_printf ("%c %c",c,c);
+                        hal_printf ("\b \b");
+                        break;
+                    case 0x09: // TAB
+                        hal_printf ("%c",c);
                         break;
                     case 0x0c: // formfeed
                         terminal.clear ();
@@ -227,6 +235,11 @@ void loop()
                     #ifdef MOS_COMPATIBILITY
                     case 0x17: // MOS escape code 23
                         mos_handle_escape_code ();
+                        break;
+                    #else
+                    case CTRL_Z:
+                    case ESC:
+                        // absorb, for now
                         break;
                     #endif
                     default:
