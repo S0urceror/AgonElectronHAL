@@ -9,6 +9,7 @@
 
 #include "hal.h"
 #include "zdi.h"
+#include "OneWire_direct_gpio.h"
 
 byte debug_flags = 0x00;
 bool zdi_mode_flag = false;
@@ -16,51 +17,88 @@ uint8_t upper_address = 0x00;
 char szLine[80];
 uint8_t charcnt = 0;
 bool ihexmode = false;
+uint8_t tdi_bitmask = PIN_TO_BITMASK(ZDI_TDI);
+uint32_t* tdi_baseReg = PIN_TO_BASEREG(ZDI_TDI);
+uint8_t tck_bitmask = PIN_TO_BITMASK(ZDI_TCK);
+uint32_t* tck_baseReg = PIN_TO_BASEREG(ZDI_TCK);
+
+void zdi_delay (uint8_t useconds)
+{
+    //asm ("nop;nop;nop;nop;");
+}
 
 // low-level bit stream
 ///////////////////////
 void zdi_start ()
 {
-    // TCK
-    digitalWrite (ZDI_TCK,HIGH);
-    usleep (ZDI_WAIT_MICRO);
-    // TDI
-    digitalWrite (ZDI_TDI,LOW);
-    pinMode (ZDI_TDI, OUTPUT);
-    usleep (ZDI_WAIT_MICRO);
+    IO_REG_TYPE tdi_mask IO_REG_MASK_ATTR = tdi_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tdi_reg IO_REG_BASE_ATTR = tdi_baseReg;
+    IO_REG_TYPE tck_mask IO_REG_MASK_ATTR = tck_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tck_reg IO_REG_BASE_ATTR = tck_baseReg;
 
-    // TCK: xx^^^^^^^^^
+    // TDI - OUTPUT - HIGH
+    // TCK - OUTPUT - HIGH
+    DIRECT_WRITE_HIGH (tdi_reg,tdi_mask);
+    DIRECT_MODE_OUTPUT (tdi_reg,tdi_mask);
+    DIRECT_WRITE_HIGH (tck_reg,tck_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
+    // TDI - OUTPUT - LOW
+    DIRECT_WRITE_LOW (tdi_reg,tdi_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
+
     // TDI: x^^^\\*____
+    // TCK: xx^^^^^^^^^
+    
 }
 void zdi_write_bit (bool bit)
 {
-    // TCK: ^\\___*//^^
     // TDI: xxxxxBBBBBB
-    digitalWrite (ZDI_TCK,LOW);
-    usleep (ZDI_WAIT_MICRO);
-    //
-    digitalWrite (ZDI_TDI,bit);
-    pinMode (ZDI_TDI, OUTPUT);
-    usleep (ZDI_WAIT_MICRO);
-    //
-    digitalWrite (ZDI_TCK,HIGH);
-    usleep (ZDI_WAIT_MICRO);
+    // TCK: ^\\___*//^^
+    IO_REG_TYPE tdi_mask IO_REG_MASK_ATTR = tdi_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tdi_reg IO_REG_BASE_ATTR = tdi_baseReg;
+    IO_REG_TYPE tck_mask IO_REG_MASK_ATTR = tck_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tck_reg IO_REG_BASE_ATTR = tck_baseReg;
+
+    // clock low
+    // TCK - OUTPUT - LOW
+    DIRECT_WRITE_LOW (tck_reg,tck_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
+    // set bit
+    // TDI - OUTPUT - BIT
+    if (bit)
+        DIRECT_WRITE_HIGH (tdi_reg,tdi_mask);
+    else
+        DIRECT_WRITE_LOW (tdi_reg,tdi_mask);
+    DIRECT_MODE_OUTPUT (tdi_reg,tdi_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
+    // clock up - triggers EZ80 to read bit
+    // TCK - OUTPUT - HIGH
+    DIRECT_WRITE_HIGH (tck_reg,tck_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
 }
 bool zdi_read_bit ()
 {
-    bool bit;
-
-    // TCK: ^\\*___//^^
     // TDI: xxxxBBBBBBB
-    digitalWrite (ZDI_TCK,LOW);
-    usleep (ZDI_WAIT_MICRO);
-    //
-    pinMode (ZDI_TDI, INPUT);
-    bit = digitalRead (ZDI_TDI);
-    usleep (ZDI_WAIT_MICRO);
-    //
-    digitalWrite (ZDI_TCK,HIGH);
-    usleep (ZDI_WAIT_MICRO);
+    // TCK: ^\\*___//^^
+    IO_REG_TYPE tdi_mask IO_REG_MASK_ATTR = tdi_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tdi_reg IO_REG_BASE_ATTR = tdi_baseReg;
+    IO_REG_TYPE tck_mask IO_REG_MASK_ATTR = tck_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tck_reg IO_REG_BASE_ATTR = tck_baseReg;
+
+    bool bit;
+    // clock low, triggers EZ80 to ready bit
+    // TCK - OUTPUT - LOW
+    DIRECT_WRITE_LOW (tck_reg,tck_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
+    // read the bit
+    // TDI - INPUT - BIT
+    DIRECT_MODE_INPUT (tdi_reg,tdi_mask);
+    bit = DIRECT_READ (tdi_reg,tdi_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
+    // clock high
+    // TCK - OUTPUT - HIGH
+    DIRECT_WRITE_HIGH (tck_reg,tck_mask);
+    //zdi_delay (ZDI_WAIT_MICRO);
     return bit;
 }
 void zdi_register (byte regnr,bool read)
@@ -108,49 +146,60 @@ byte zdi_read_register (byte regnr)
 
     // TCK: xx^^^^^^^^ xxx___*//^^ ^^^___*//^^ ^^^___*//^^ ^^^___*//^^ ^^\\*__//^^
     // TDI: x^^^\\*___ xxxxxBBBBBB xxxxxBBBBBB xxxxxBBBBBB xxxxxBBBBBB xxxxxBBBBBB
+    noInterrupts();
     zdi_start ();
     zdi_register (regnr,ZDI_READ);
-    zdi_separator (ZDI_CMD_CONTINUE);
+    zdi_separator (1);
     value  = zdi_read ();
-    zdi_separator (ZDI_CMD_DONE);
-
+    zdi_separator (0);
+    delayMicroseconds (3);
+    interrupts();
     return value;
 }
 void zdi_write_register (byte regnr, byte value)
 {
+    noInterrupts();
     zdi_start ();
     zdi_register (regnr,ZDI_WRITE);
-    zdi_separator (ZDI_CMD_CONTINUE);
+    zdi_separator (1);
     zdi_write(value);
-    zdi_separator (ZDI_CMD_DONE);
+    zdi_separator (1);
+    delayMicroseconds (3);
+    interrupts();
 }
 
 void zdi_read_registers (byte startregnr, byte count, byte* values)
 {
     byte* ptr = values;
-
+    noInterrupts();
     zdi_start ();
     zdi_register (startregnr,ZDI_READ);
     while (count-- > 0)
     {
         zdi_separator (ZDI_CMD_CONTINUE);
+        delayMicroseconds (3);
         *(ptr++)  = zdi_read ();
     }
     zdi_separator (ZDI_CMD_DONE);
+    delayMicroseconds (3);
+    interrupts();
 }
 
 void zdi_write_registers (byte startregnr, byte count, byte* values)
 {
     byte* ptr = values;
-
+    noInterrupts();
     zdi_start ();
     zdi_register (startregnr,ZDI_WRITE);
     while (count-- > 0)
     {
         zdi_separator (ZDI_CMD_CONTINUE);
+        delayMicroseconds (3);
         zdi_write (*(ptr++));
     }
     zdi_separator (ZDI_CMD_DONE);
+    delayMicroseconds (3);
+    interrupts();
 }
 
 // high-level debugging, register and memory read functions
@@ -176,6 +225,8 @@ uint8_t zdi_get_bus_status ()
 uint32_t zdi_read_cpu (rw_control_t rw)
 {
     zdi_write_register (ZDI_RW_CTL,rw);
+    if (rw==SET_ADL || rw==RESET_ADL)
+        return 0;
     byte values[3];
     zdi_read_registers (ZDI_RD_L,3,values);
     return (values[2]<<16)+(values[1]<<8)+values[0]; // U+H+L
@@ -201,10 +252,12 @@ void zdi_read_memory (uint32_t address,uint16_t count, byte* memory)
     for (int i=0;i<count;i++)
     {
         zdi_separator (ZDI_CMD_CONTINUE);
+        delayMicroseconds (3);
         *(ptr++) = zdi_read ();
     }
     // done
     zdi_separator (ZDI_CMD_DONE);
+    delayMicroseconds (3);
 }
 void zdi_write_memory (uint32_t address,uint32_t count, byte* memory)
 {
@@ -217,10 +270,12 @@ void zdi_write_memory (uint32_t address,uint32_t count, byte* memory)
     for (uint32_t i=0;i<count;i++)
     {
         zdi_separator (ZDI_CMD_CONTINUE);
+        delayMicroseconds (3);
         zdi_write (*(ptr++));
     }
     // done
     zdi_separator (ZDI_CMD_DONE);
+    delayMicroseconds (3);
 }
 void zdi_debug_break ()
 {
@@ -234,9 +289,12 @@ void zdi_debug_continue ()
 }
 void zdi_debug_step ()
 {
-    // set single-step bit
+    // set single-step bit, keep status other bp's + break next
     debug_flags |= 0b00000001;
     zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    // reset single-step bit, keep status other bp's + break next
+    //debug_flags &= 0b11111110;
+    //zdi_write_register (ZDI_BRK_CTL, debug_flags);
 }
 bool zdi_debug_breakpoint_reached ()
 {
@@ -285,6 +343,9 @@ bool zdi_mode ()
 }
 void zdi_enter ()
 {
+    IO_REG_TYPE tck_mask IO_REG_MASK_ATTR = tck_bitmask;
+	__attribute__((unused)) volatile IO_REG_TYPE *tck_reg IO_REG_BASE_ATTR = tck_baseReg;
+    
     ihexmode = false;
     // clear line buffer
     memset (szLine,0,sizeof(szLine));
@@ -293,9 +354,9 @@ void zdi_enter ()
     //debug_flags = 0x00;
 
     zdi_mode_flag = true;
-    digitalWrite (ZDI_TCK,HIGH);
-    pinMode (ZDI_TCK, OUTPUT);
-
+    DIRECT_WRITE_HIGH (tck_reg,tck_mask);
+    DIRECT_MODE_OUTPUT (tck_reg,tck_mask);
+    
     // get cpu identification
     hal_printf ("\r\nZDI mode EZ80: %X.%X\r\n#",zdi_get_productid (),zdi_get_revision());
 }
@@ -323,22 +384,35 @@ void zdi_exit ()
 void zdi_debug_status (debug_state_t state)
 {
     byte mem[8];
+    uint32_t pc;
+    uint32_t af;
+    uint8_t f;
+    uint8_t mbase;
+    uint32_t bc;
+    uint32_t de;
+    uint32_t hl;
+    uint32_t ix;
+    uint32_t iy;
+    uint32_t spl;
+    uint16_t sps;
+    uint8_t status;
     // cpu status
-    uint8_t status = zdi_get_cpu_status ();
+    status = zdi_get_cpu_status ();
     // read register contents
     zdi_read_cpu (SET_ADL);
-    uint32_t pc = zdi_read_cpu (REG_PC);
-    uint32_t af = zdi_read_cpu (REG_AF);
-    uint8_t f = (af>>8) &0xff;
-    uint8_t mbase = (af>>16) &0xff;
-    uint32_t bc = zdi_read_cpu (REG_BC);
-    uint32_t de = zdi_read_cpu (REG_DE);
-    uint32_t hl = zdi_read_cpu (REG_HL);
-    uint32_t ix = zdi_read_cpu (REG_IX);
-    uint32_t iy = zdi_read_cpu (REG_IY);
-    uint32_t spl = zdi_read_cpu (REG_SP);
+    pc = zdi_read_cpu (REG_PC);
+    
+    af = zdi_read_cpu (REG_AF);
+    f = (af>>8) &0xff;
+    mbase = (af>>16) &0xff;
+    bc = zdi_read_cpu (REG_BC);
+    de = zdi_read_cpu (REG_DE);
+    hl = zdi_read_cpu (REG_HL);
+    ix = zdi_read_cpu (REG_IX);
+    iy = zdi_read_cpu (REG_IY);
+    spl = zdi_read_cpu (REG_SP);
     zdi_read_cpu (RESET_ADL);
-    uint16_t sps = zdi_read_cpu (REG_SP);
+    sps = zdi_read_cpu (REG_SP);
     if (status&0b00010000)
         zdi_read_cpu (SET_ADL);
     
@@ -749,6 +823,8 @@ void zdi_process_line ()
             zdi_cpu_instruction_out (CS3_CTL,0x00);            // memory chip select, cs3 disabled
             // set stack pointer
             zdi_write_cpu (REG_SP,0x0BFFFF);
+            // set program counter
+            zdi_write_cpu (REG_PC,0x000000);
             // show status
             zdi_debug_status (BREAK);
             break;

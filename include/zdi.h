@@ -1,6 +1,9 @@
 #ifndef __ZDI_H_
 #define __ZDI_H_
 
+// Board-specific macros for direct GPIO
+#include "OneWire_direct_regtype.h"
+
 #define ZDI_TCK 26
 #define ZDI_TDI 27
 #define ZDI_READ 1
@@ -11,7 +14,7 @@
 // nr of microseconds to wait for next bit
 // documentation says 4Mhz ZCLK speed is possible, so 0.25 usecs
 // we stay a bit on the safe side with 10 usecs
-#define ZDI_WAIT_MICRO 10
+#define ZDI_WAIT_MICRO 1
 
 // ZDI write registers
 #define ZDI_ADDR0_L     0x00
@@ -237,6 +240,7 @@ typedef enum
 } debug_state_t;
 
 // low-level bit stream
+void zdi_delay (uint8_t);
 void zdi_start ();
 void zdi_write_bit (bool bit);
 bool zdi_read_bit ();
