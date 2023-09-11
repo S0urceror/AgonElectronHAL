@@ -22,10 +22,7 @@ uint32_t* tdi_baseReg = PIN_TO_BASEREG(ZDI_TDI);
 uint8_t tck_bitmask = PIN_TO_BITMASK(ZDI_TCK);
 uint32_t* tck_baseReg = PIN_TO_BASEREG(ZDI_TCK);
 
-void zdi_delay (uint8_t useconds)
-{
-    //asm ("nop;nop;nop;nop;");
-}
+extern HardwareSerial host_serial;
 
 // low-level bit stream
 ///////////////////////
@@ -41,10 +38,8 @@ void zdi_start ()
     DIRECT_WRITE_HIGH (tdi_reg,tdi_mask);
     DIRECT_MODE_OUTPUT (tdi_reg,tdi_mask);
     DIRECT_WRITE_HIGH (tck_reg,tck_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
     // TDI - OUTPUT - LOW
     DIRECT_WRITE_LOW (tdi_reg,tdi_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
 
     // TDI: x^^^\\*____
     // TCK: xx^^^^^^^^^
@@ -62,7 +57,6 @@ void zdi_write_bit (bool bit)
     // clock low
     // TCK - OUTPUT - LOW
     DIRECT_WRITE_LOW (tck_reg,tck_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
     // set bit
     // TDI - OUTPUT - BIT
     if (bit)
@@ -70,11 +64,9 @@ void zdi_write_bit (bool bit)
     else
         DIRECT_WRITE_LOW (tdi_reg,tdi_mask);
     DIRECT_MODE_OUTPUT (tdi_reg,tdi_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
     // clock up - triggers EZ80 to read bit
     // TCK - OUTPUT - HIGH
     DIRECT_WRITE_HIGH (tck_reg,tck_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
 }
 bool zdi_read_bit ()
 {
@@ -89,16 +81,13 @@ bool zdi_read_bit ()
     // clock low, triggers EZ80 to ready bit
     // TCK - OUTPUT - LOW
     DIRECT_WRITE_LOW (tck_reg,tck_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
     // read the bit
     // TDI - INPUT - BIT
     DIRECT_MODE_INPUT (tdi_reg,tdi_mask);
     bit = DIRECT_READ (tdi_reg,tdi_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
     // clock high
     // TCK - OUTPUT - HIGH
     DIRECT_WRITE_HIGH (tck_reg,tck_mask);
-    //zdi_delay (ZDI_WAIT_MICRO);
     return bit;
 }
 void zdi_register (byte regnr,bool read)
@@ -277,24 +266,39 @@ void zdi_write_memory (uint32_t address,uint32_t count, byte* memory)
     zdi_separator (ZDI_CMD_DONE);
     delayMicroseconds (3);
 }
+void zdi_print_debug_status () 
+{
+    hal_hostpc_printf ("\r\n(break control: %c%c%c%c%c%c)",debug_flags&0b10000000?'N':'.',
+                                                    debug_flags&0b00001000?'1':'.',
+                                                    debug_flags&0b00010000?'2':'.',
+                                                    debug_flags&0b00100000?'3':'.',
+                                                    debug_flags&0b01000000?'4':'.',
+                                                    debug_flags&0b00000001?'S':'.');
+}
+
 void zdi_debug_break ()
 {
     debug_flags |= 0b10000000;
     zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    zdi_print_debug_status ();
 }
 void zdi_debug_continue ()
 {
-    debug_flags &= 0b01111110;
+    debug_flags &= 0b01111111;
     zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    zdi_print_debug_status ();
 }
 void zdi_debug_step ()
 {
     // set single-step bit, keep status other bp's + break next
-    debug_flags |= 0b00000001;
+    debug_flags |= 0b10000001;
     zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    zdi_print_debug_status ();
+
     // reset single-step bit, keep status other bp's + break next
-    //debug_flags &= 0b11111110;
-    //zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    debug_flags &= 0b11111110;
+    zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    zdi_print_debug_status ();
 }
 bool zdi_debug_breakpoint_reached ()
 {
@@ -312,12 +316,15 @@ void zdi_debug_breakpoint_enable (uint8_t index,uint32_t address)
     // enable bp
     debug_flags|=(0b00001000 << index);
     zdi_write_register (ZDI_BRK_CTL, debug_flags);
+
+    zdi_print_debug_status ();
 }
 void zdi_debug_breakpoint_disable (uint8_t index)
 {
     byte mask = (0b00001000 << index);
     debug_flags &= (~mask);
     zdi_write_register (ZDI_BRK_CTL, debug_flags);
+    zdi_print_debug_status ();
 }
 uint8_t zdi_available_break_point()
 {
@@ -352,13 +359,15 @@ void zdi_enter ()
     charcnt=0;
     upper_address = 0x00;
     //debug_flags = 0x00;
+    if (zdi_debug_breakpoint_reached())
+        debug_flags |= 0b10000000;
 
     zdi_mode_flag = true;
     DIRECT_WRITE_HIGH (tck_reg,tck_mask);
     DIRECT_MODE_OUTPUT (tck_reg,tck_mask);
     
     // get cpu identification
-    hal_printf ("\r\nZDI mode EZ80: %X.%X\r\n#",zdi_get_productid (),zdi_get_revision());
+    hal_hostpc_printf ("\r\nZDI mode EZ80: %X.%X\r\n#",zdi_get_productid (),zdi_get_revision());
 }
 void zdi_exit ()
 {
@@ -366,197 +375,41 @@ void zdi_exit ()
     //for (uint8_t i=0;i<zdi_available_break_point();i++)
     //    zdi_debug_breakpoint_disable (i);
     if (zdi_available_break_point()>0)
-        hal_printf ("\r\n(exiting, breakpoint active)\r\n");
+        hal_hostpc_printf ("\r\n(exiting, breakpoint active)\r\n");
 
     // back to running mode if we are at breakpoint
     if (zdi_debug_breakpoint_reached())
-        hal_printf ("\r\n(exiting, break active)\r\n");
+        hal_hostpc_printf ("\r\n(exiting, break active)\r\n");
         //zdi_debug_continue ();
     else
-        hal_printf ("\r\n(exiting)\r\n");
+        hal_hostpc_printf ("\r\n(exiting)\r\n");
 
     zdi_mode_flag = false;
-    hal_printf ("\r\n*");
+    hal_hostpc_printf ("\r\n*");
 }
 
-// ZDI interface
-///////////////////////
-void zdi_debug_status (debug_state_t state)
+
+uint8_t zdi_cpu_instruction_ld_r () 
 {
-    byte mem[8];
-    uint32_t pc;
-    uint32_t af;
-    uint8_t f;
-    uint8_t mbase;
-    uint32_t bc;
-    uint32_t de;
-    uint32_t hl;
-    uint32_t ix;
-    uint32_t iy;
-    uint32_t spl;
-    uint16_t sps;
-    uint8_t status;
-    // cpu status
-    status = zdi_get_cpu_status ();
-    // read register contents
-    zdi_read_cpu (SET_ADL);
-    pc = zdi_read_cpu (REG_PC);
-    
-    af = zdi_read_cpu (REG_AF);
-    f = (af>>8) &0xff;
-    mbase = (af>>16) &0xff;
-    bc = zdi_read_cpu (REG_BC);
-    de = zdi_read_cpu (REG_DE);
-    hl = zdi_read_cpu (REG_HL);
-    ix = zdi_read_cpu (REG_IX);
-    iy = zdi_read_cpu (REG_IY);
-    spl = zdi_read_cpu (REG_SP);
-    zdi_read_cpu (RESET_ADL);
-    sps = zdi_read_cpu (REG_SP);
-    if (status&0b00010000)
-        zdi_read_cpu (SET_ADL);
-    
-    hal_printf ("\r\nA=%02X BC=%06X DE=%06X HL=%06X IX=%06X IY=%06X SPL=%06X", af & 0xff,bc,de,hl,ix,iy,spl);
-    hal_printf ("\r\nFlags=%c%c%c%c%c%c Status=%c%c%c%c%c PC=%06X MBASE=%02X           SPS=%04X",
-                                                    f&0b10000000?'P':'N',
-                                                    f&0b01000000?'Z':'.',
-                                                    f&0b00010000?'H':'.',
-                                                    f&0b00000100?'P':'V',
-                                                    f&0b00000010?'A':'S',
-                                                    f&0b00000001?'C':'.',
-                                                    status&0b10000000?'Z':'.',
-                                                    status&0b00100000?'H':'.',
-                                                    status&0b00010000?'A':'.',
-                                                    status&0b00001000?'M':'.',
-                                                    status&0b00001000?'I':'.',
-                                                    pc,
-                                                    mbase,
-                                                    sps);        
+    // ld a, nn
+    uint8_t instructions[2];
+    instructions[0]=0x5f;
+    instructions[1]=0xed;
+    zdi_write_registers (ZDI_IS1,2,instructions);
 
-    // show register contents
-    if (status & 0b10000000) // stopped at a breakpoint
-    {
-        // disassembly at PC?               
-        zdi_read_memory (pc,8,mem);
-        hal_printf ("\r\n%06X %02X %02X %02X %02X %02X %02X %02X %02X",pc,mem[0],mem[1],mem[2],mem[3],mem[4],mem[5],mem[6],mem[7]);
-        zdi_write_cpu (REG_PC,pc);
-    }
-
-    // show state
-    const char* prompt;
-    switch (state)
-    {
-        case RUN: prompt = "running";break;
-        case BREAK: prompt = "break";break;
-        case STEP: prompt = "step";break;
-    }
-    hal_printf ("\r\n(%s)\r\n#",prompt);                                                                            
+    uint32_t af = zdi_read_cpu (REG_AF);
+    return (uint8_t) (af & 0xff);
 }
-
-#define LINE_LENGTH 0x20
-void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size,bool first, bool last)
+uint8_t zdi_cpu_instruction_ld_i () 
 {
-    uint8_t checksum=0;
-    for (int i=0;i<size;i++)
-    {
-        if ((i%LINE_LENGTH)==0)
-        {
-            uint8_t new_upper_address = (start>>16);
-            if (new_upper_address!=upper_address)
-            {
-                upper_address = new_upper_address;
-                checksum = (~(0x02+0x04+upper_address));
-                hal_printf (":0200000400%02X%02X\r\n",upper_address,checksum+1);
-                checksum = 0;
-            }
-            uint16_t pc = i+(start&0xffff);
-            hal_printf (":%02X%04X00",LINE_LENGTH,pc);
-            checksum += LINE_LENGTH + ((pc>>8)&0xff) + (pc&0xff);
-        }
-        checksum+=memory[i];
-        hal_printf ("%02X",memory[i]);
-        if ((i%LINE_LENGTH)==(LINE_LENGTH-1))
-        {
-            checksum = (~checksum);
-            hal_printf ("%02X\r\n",(uint8_t)(checksum+1));
-            checksum = 0;
-        }
-    }
-    if (last)
-        hal_printf (":00000001FF\r\n#");
-}
-bool cpu_was_at_breakpoint = false;
-void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
-{
-    char szLen[3],szAddress[5],szType[3],szCheckSum[3],szByte[3];
-    szByte[2]='\0';
-    strncpy (szLen,szLine+1,2);szLen[2]='\0';
-    strncpy (szAddress,szLine+3,4);szAddress[4]='\0';
-    strncpy (szType,szLine+7,2);szType[2]='\0';
-    strncpy (szCheckSum,szLine+charcnt-2,2);szCheckSum[2]='\0';
-    uint8_t len = strtoul (szLen,NULL,16);
-    uint32_t address = (uint16_t) strtoul (szAddress,NULL,16);
-    uint8_t type = strtoul (szType,NULL,16);
-    uint8_t checksum = strtoul (szCheckSum,NULL,16);
-    uint8_t check = (uint8_t)len + 
-                    (uint8_t)((address>>8)&0xff) + 
-                    (uint8_t)(address&0xff) + 
-                    (uint8_t)type;
-    if (type==0)
-    {
-        // get pc
-        uint32_t pc = zdi_read_cpu (REG_PC);
+    // ld a, nn
+    uint8_t instructions[2];
+    instructions[0]=0x57;
+    instructions[1]=0xed;
+    zdi_write_registers (ZDI_IS1,2,instructions);
 
-        // calculate long address
-        address = (upper_address<<16)+address;
-        
-        // allocate memory
-        byte* memory = (byte*) malloc (len);
-        
-        // parse data
-        for (uint8_t i=0;i<len;i++)
-        {
-            strncpy (szByte,szLine+9+i*2,2);
-            byte b = strtoul (szByte,NULL,16);
-            memory[i] = b;
-            check = check + b;
-        }
-
-        // only write to memory when no checksum error
-        check = (~check);
-        check++;
-        if (check != checksum)
-            hal_printf ("!");
-        else
-        {
-            hal_printf (".");
-            // write to ez80 and free memory
-            zdi_write_memory (address,len,memory);
-        }
-
-        free (memory);
-
-        // restore pc
-        zdi_write_cpu (REG_PC, pc);
-    }
-    if (type==1)
-    {
-        // end of file
-        if (!cpu_was_at_breakpoint)
-            zdi_debug_continue ();
-
-    }
-    if (type==4 || type==2)
-    {
-        // start of file
-        cpu_was_at_breakpoint = zdi_debug_breakpoint_reached();
-        if (!cpu_was_at_breakpoint)
-            zdi_debug_break ();
-
-        char szUpper[5];
-        strncpy (szUpper,szLine+9,4);szUpper[4]='\0';
-        upper_address = strtoul (szUpper,NULL,16)&0xff;
-    }
+    uint32_t af = zdi_read_cpu (REG_AF);
+    return (uint8_t) (af & 0xff);
 }
 void zdi_cpu_instruction_out0 (uint8_t regnr, uint8_t value)
 {
@@ -589,26 +442,243 @@ void zdi_cpu_instruction_di ()
     zdi_write_register (ZDI_IS0,0xf3);
 }
 
+// ZDI interface
+///////////////////////
+void zdi_debug_status (debug_state_t state)
+{
+    byte mem[8];
+    uint32_t pc;
+    uint32_t af;
+    uint8_t f;
+    uint8_t mbase;
+    uint32_t bc;
+    uint32_t de;
+    uint32_t hl;
+    uint32_t ix;
+    uint32_t iy;
+    uint32_t spl;
+    uint16_t sps;
+    uint8_t status;
+    uint8_t i,r=0;
+
+    // cpu status
+    status = zdi_get_cpu_status ();
+
+    // break to properly read registers
+    if (!(status&0b10000000))
+        zdi_debug_break ();
+
+    // read register contents
+    zdi_read_cpu (SET_ADL);
+    pc = zdi_read_cpu (REG_PC);
+    
+    af = zdi_read_cpu (REG_AF);
+    f = (af>>8) &0xff;
+    mbase = (af>>16) &0xff;
+    bc = zdi_read_cpu (REG_BC);
+    de = zdi_read_cpu (REG_DE);
+    hl = zdi_read_cpu (REG_HL);
+    ix = zdi_read_cpu (REG_IX);
+    iy = zdi_read_cpu (REG_IY);
+    spl = zdi_read_cpu (REG_SP);
+    zdi_read_cpu (RESET_ADL);
+    sps = zdi_read_cpu (REG_SP);
+    if (status&0b00010000)
+        zdi_read_cpu (SET_ADL);
+
+    // reading R and I registers destroys contents of A and PC
+    r = zdi_cpu_instruction_ld_r ();
+    i = zdi_cpu_instruction_ld_i ();
+    // restore AF+MBASE
+    zdi_write_cpu (REG_AF,af);
+    // restore PC
+    zdi_write_cpu (REG_PC,pc);
+
+    // continue when not in break state before
+    if (!(status&0b10000000))
+        zdi_debug_continue ();
+    
+    hal_hostpc_printf ("\r\nA=%02X BC=%06X DE=%06X HL=%06X IX=%06X IY=%06X SPL=%06X", af & 0xff,bc,de,hl,ix,iy,spl);
+    hal_hostpc_printf ("\r\nF=%02X %c%c%c%c%c%c   STAT=%c%c%c%c%c PC=%06X MBASE=%02X  I=%02X R=%02X SPS=%04X",
+                                                    f,
+                                                    f&0b10000000?'P':'N',
+                                                    f&0b01000000?'Z':'.',
+                                                    f&0b00010000?'H':'.',
+                                                    f&0b00000100?'P':'V',
+                                                    f&0b00000010?'A':'S',
+                                                    f&0b00000001?'C':'.',
+                                                    status&0b10000000?'Z':'.',
+                                                    status&0b00100000?'H':'.',
+                                                    status&0b00010000?'A':'.',
+                                                    status&0b00001000?'M':'.',
+                                                    status&0b00001000?'I':'.',
+                                                    pc,
+                                                    mbase,
+                                                    i,
+                                                    r,
+                                                    sps);        
+
+    // show register contents
+    if (state==BREAK || state==STEP) // stopped at a breakpoint
+    {
+        // disassembly at PC?               
+        zdi_read_memory (pc,8,mem);
+        hal_hostpc_printf ("\r\n%06X %02X %02X %02X %02X %02X %02X %02X %02X",pc,mem[0],mem[1],mem[2],mem[3],mem[4],mem[5],mem[6],mem[7]);
+        zdi_write_cpu (REG_PC,pc);
+    }
+
+    // show state
+    const char* prompt;
+    switch (state)
+    {
+        case RUN: prompt = "running";break;
+        case BREAK: prompt = "break";break;
+        case STEP: prompt = "step";break;
+        case REGONLY: prompt = "registers";break;
+    }
+    hal_hostpc_printf ("\r\n(%s)\r\n#",prompt);                                                                            
+}
+
+uint8_t zdi_checksum_memory (byte* memory,uint16_t len)
+{
+    uint8_t checksum=0;
+    for (uint16_t i=0;i<len;i++)
+        checksum += memory[i];
+    return (~checksum) + 1;
+}
+#define LINE_LENGTH 0x20
+void zdi_bin_to_intel_hex (byte* memory,uint32_t start,uint16_t size,bool first, bool last)
+{
+    uint8_t checksum=0;
+    uint8_t line_len;
+    for (int i=0;i<size;i++)
+    {
+        if (size>=LINE_LENGTH)
+            line_len = LINE_LENGTH;
+        else    
+            line_len = size;
+
+        if ((i%line_len)==0)
+        {
+            uint8_t new_upper_address = (start>>16);
+            if (new_upper_address!=upper_address)
+            {
+                upper_address = new_upper_address;
+                checksum = (~(0x02+0x04+upper_address));
+                hal_hostpc_printf (":0200000400%02X%02X\r\n",upper_address,checksum+1);
+                checksum = 0;
+            }
+            uint16_t pc = i+(start&0xffff);
+            hal_hostpc_printf (":%02X%04X00",line_len,pc);
+            checksum += line_len + ((pc>>8)&0xff) + (pc&0xff);
+        }
+        checksum+=memory[i];
+        hal_hostpc_printf ("%02X",memory[i]);
+        if ((i%line_len)==(line_len-1))
+        {
+            checksum = (~checksum);
+            hal_hostpc_printf ("%02X\r\n",(uint8_t)(checksum+1));
+            checksum = 0;
+        }
+    }
+    if (last)
+        hal_hostpc_printf (":00000001FF\r\n#");
+}
+bool cpu_was_at_breakpoint = false;
+void zdi_intel_hex_to_bin(char* szLine, uint8_t charcnt)
+{
+    char szLen[3],szAddress[5],szType[3],szCheckSum[3],szByte[3];
+    szByte[2]='\0';
+    strncpy (szLen,szLine+1,2);szLen[2]='\0';
+    strncpy (szAddress,szLine+3,4);szAddress[4]='\0';
+    strncpy (szType,szLine+7,2);szType[2]='\0';
+    strncpy (szCheckSum,szLine+charcnt-2,2);szCheckSum[2]='\0';
+    uint8_t len = strtoul (szLen,NULL,16);
+    uint32_t address = (uint16_t) strtoul (szAddress,NULL,16);
+    uint8_t type = strtoul (szType,NULL,16);
+    uint8_t checksum = strtoul (szCheckSum,NULL,16);
+    uint8_t check = (uint8_t)len + 
+                    (uint8_t)((address>>8)&0xff) + 
+                    (uint8_t)(address&0xff) + 
+                    (uint8_t)type;
+                    
+    if (type==0)
+    {
+        // get pc
+        uint32_t pc = zdi_read_cpu (REG_PC);
+
+        // calculate long address
+        address = (upper_address<<16)+address;
+        
+        // allocate memory
+        byte* memory = (byte*) malloc (len);
+        
+        // parse data
+        for (uint8_t i=0;i<len;i++)
+        {
+            strncpy (szByte,szLine+9+i*2,2);
+            byte b = strtoul (szByte,NULL,16);
+            memory[i] = b;
+            check = check + b;
+        }
+
+        // only write to memory when no checksum error
+        check = (~check);
+        check++;
+        if (check != checksum)
+            hal_hostpc_printf ("!");
+        else
+        {
+            hal_hostpc_printf (".");
+            // write to ez80 and free memory
+            zdi_write_memory (address,len,memory);
+        }
+
+        free (memory);
+
+        // restore pc
+        zdi_write_cpu (REG_PC, pc);
+    }
+    if (type==1)
+    {
+        // end of file
+        if (!cpu_was_at_breakpoint)
+            zdi_debug_continue ();
+        hal_hostpc_printf ("\r\n#");
+    }
+    if (type==4 || type==2)
+    {
+        // start of file
+        cpu_was_at_breakpoint = zdi_debug_breakpoint_reached();
+        if (!cpu_was_at_breakpoint)
+            zdi_debug_break ();
+
+        char szUpper[5];
+        strncpy (szUpper,szLine+9,4);szUpper[4]='\0';
+        upper_address = strtoul (szUpper,NULL,16)&0xff;
+    }
+}
 void zdi_process_line ()
 {
+    char* pChar = szLine;
     switch (szLine[0])
     {
         case 'h':
-            hal_printf ("\r\nh                              - this help message");
-            hal_printf ("\r\ni                              - bring EZ80 to an initialized state");
-            hal_printf ("\r\na / z                          - switch to ADL or Z80 mode");
-            hal_printf ("\r\nb                              - break the program");
-            hal_printf ("\r\nb address                      - set breakpoint at hex address");
-            hal_printf ("\r\nd nr                           - unset breakpoint");
-            hal_printf ("\r\nc                              - continue the program");
-            hal_printf ("\r\ns                              - step by step");
-            hal_printf ("\r\nr                              - show registers and status");
-            hal_printf ("\r\nR                              - reset CPU");
-            hal_printf ("\r\nj address                      - jump to address");
-            hal_printf ("\r\nx address [size]               - examine memory from address");
-            hal_printf ("\r\n:0123456789ABCD                - write to memory in Intel Hex");
-            hal_printf ("\r\nw begin end start filename.bin - ez80 to write memory to file");
-            hal_printf ("\r\n#");
+            hal_hostpc_printf ("\r\nh                              - this help message");
+            hal_hostpc_printf ("\r\ni                              - bring EZ80 to an initialized state");
+            hal_hostpc_printf ("\r\na / z                          - switch to ADL or Z80 mode");
+            hal_hostpc_printf ("\r\nb                              - break the program");
+            hal_hostpc_printf ("\r\nb address                      - set breakpoint at hex address");
+            hal_hostpc_printf ("\r\nd nr                           - unset breakpoint");
+            hal_hostpc_printf ("\r\nc                              - continue the program");
+            hal_hostpc_printf ("\r\ns                              - step by step");
+            hal_hostpc_printf ("\r\nr                              - show registers and status");
+            hal_hostpc_printf ("\r\nR                              - reset CPU");
+            hal_hostpc_printf ("\r\nj address                      - jump to address");
+            hal_hostpc_printf ("\r\nx address [size]               - examine memory from address");
+            hal_hostpc_printf ("\r\n:0123456789ABCD                - write to memory in Intel Hex");
+            hal_hostpc_printf ("\r\nw begin end start filename.bin - ez80 to write memory to file");
+            hal_hostpc_printf ("\r\n#");
             break;
         case 'b':
             if (charcnt==1)
@@ -620,15 +690,23 @@ void zdi_process_line ()
             else
             {
                 // set breakpoint to address
-                uint32_t address = strtoul (szLine+1,NULL,16);
-                uint8_t bp = zdi_available_break_point();
+                char* pIndex=NULL;
+                uint32_t address = strtoul (szLine+1,&pIndex,16);
+                uint8_t bp;
+                if (*pIndex != '\0')
+                {
+                    bp = strtoul (pIndex,NULL,16);
+                    bp--;
+                }
+                else 
+                    bp = zdi_available_break_point();
                 if (bp!=255)
                 {
                     zdi_debug_breakpoint_enable (bp,address);
-                    hal_printf ("\r\n(bp%d set to 0x%06X)\r\n#",bp+1,address);
+                    hal_hostpc_printf ("\r\n(bp%d set to 0x%06X)\r\n#",bp+1,address);
                 }
                 else
-                    hal_printf ("\r\n(error, not more than 4 hw breakpoints)\r\n#");
+                    hal_hostpc_printf ("\r\n(error, not more than 4 hw breakpoints)\r\n#");
             }
             break;
         case 'd':
@@ -640,13 +718,13 @@ void zdi_process_line ()
                 if (bp<4)
                 {
                     zdi_debug_breakpoint_disable (bp);
-                    hal_printf ("\r\n(bp%d disabled)\r\n#",bp+1);
+                    hal_hostpc_printf ("\r\n(bp%d disabled)\r\n#",bp+1);
                 }
                 else
-                    hal_printf ("\r\n(error, not more than 4 hw breakpoints)\r\n#");
+                    hal_hostpc_printf ("\r\n(error, not more than 4 hw breakpoints)\r\n#");
             }
             else
-                hal_printf ("\r\n(error, specify breakpoint)\r\n#");
+                hal_hostpc_printf ("\r\n(error, specify breakpoint)\r\n#");
             break;
         case 'j': // jump to address
             if (charcnt>2)
@@ -661,24 +739,129 @@ void zdi_process_line ()
                 // continue if
                 if (!already_breaked)
                 {
-                    hal_printf ("\r\n(jumping to 0x%06X)\r\n#",address);
+                    hal_hostpc_printf ("\r\n(jumping to 0x%06X)\r\n#",address);
                     zdi_debug_continue();  
                 }
                 else
                 {
-                    hal_printf ("\r\n(PC set to 0x%06X)\r\n#",address);
+                    hal_hostpc_printf ("\r\n(PC set to 0x%06X)\r\n#",address);
                 }
             }
             else
             {
-                hal_printf ("\r\n(error, no jump address)\r\n#");
+                hal_hostpc_printf ("\r\n(error, no jump address)\r\n#");
             }
+            break;
+        case 'e':
+            // execute command in ElectronOS by sending chars to HardwareSerial
+            if (charcnt>2)
+            {
+                bool already_breaked = false;
+                if (zdi_debug_breakpoint_reached())
+                {
+                    already_breaked = true;
+                    zdi_debug_continue ();
+                }
+                
+                ez80_serial.write (szLine+2);
+                ez80_serial.write ("\r\n");
+                
+                if (already_breaked)
+                    zdi_debug_break ();
+
+                hal_hostpc_printf ("\r\n(command send to ElectronOS)\r\n#");
+            }
+            break;
+        case 'X':
+            if (charcnt>2)
+            {
+                // break cpu
+                bool already_breaked = false;
+                if (zdi_debug_breakpoint_reached())
+                    already_breaked = true;
+                else
+                    zdi_debug_break ();
+                
+                // get pc
+                uint32_t pc = zdi_read_cpu (REG_PC);
+
+                // get requested address + size
+                char* pStart = szLine+2;
+                char* pSize;
+                u32_t address=strtoul (pStart,&pSize,16);
+                u32_t size=LINE_LENGTH;
+                if (*pSize != '\0')
+                    size = strtoul (pSize,NULL,16);
+                u32_t total_size = size;
+
+                const uint8_t CHUNKSIZE = 30;
+                byte* mem = (byte*) malloc (CHUNKSIZE);        
+                // retrieve and send binary
+                while (size>0) 
+                {
+                    // how many bytes still to transfer?
+                    uint8_t chunksize = (size>CHUNKSIZE) ? CHUNKSIZE : size;
+                    // more then 0? let's write
+                    if (chunksize>0)
+                    {
+                        memset (mem,0,CHUNKSIZE);
+                        zdi_read_memory (address,chunksize,mem);
+                        host_serial.write (chunksize);
+                        host_serial.write (mem,CHUNKSIZE); // read memory with or without trailing zeroes
+                        uint8_t checksum = zdi_checksum_memory (mem,chunksize);
+                        host_serial.write (checksum);
+
+                        // hal_terminal_printf ("%02X - %02X%02X%02X%02X%02X%02X - %02X\r\n",chunksize,
+                        //                                                      mem[0],
+                        //                                                      mem[1],
+                        //                                                      mem[2],
+                        //                                                      mem[3],
+                        //                                                      mem[4],
+                        //                                                      mem[5],
+                        //                                                      checksum);
+                   
+                        // wait for response from host
+                        char ch;
+                        uint8_t times = 10;
+                        while ((ch=hal_hostpc_serial_read())==0);
+                        if (ch=='+') 
+                        {
+                            // okay? else resend
+                            size -= chunksize;
+                            address += chunksize;
+                            continue;
+                        }
+                        if (ch=='-') 
+                        {
+                            hal_hostpc_printf ("\r\n(error, resending)\r\n#");
+                            continue;
+                        }
+                        if (ch==0x1b)
+                        {
+                            hal_hostpc_printf ("\r\n(error, host escapes)\r\n#");
+                            break;
+                        }
+                    }
+                }
+                free (mem);
+
+                // restore pc
+                zdi_write_cpu (REG_PC, pc);
+
+                // continue if
+                if (!already_breaked)
+                    zdi_debug_continue();
+
+                // ready prompt
+                hal_hostpc_printf ("\r\n(%ld bytes transferred)\r\n#",total_size);
+            }
+            else
+                hal_hostpc_printf ("\r\n(error, no start address)\r\n#");
             break;
         case 'x': // examine, memory dump
             if (charcnt>2)
             {
-                hal_printf ("\r\n");
-                upper_address = 0xff;
+                hal_hostpc_printf ("\r\n");
 
                 // break cpu
                 bool already_breaked = false;
@@ -701,10 +884,12 @@ void zdi_process_line ()
                 // read memory in chunks of LINE_LENGTH
                 bool first = true;
                 bool last = false;
-                uint16_t chunk = (size>LINE_LENGTH?LINE_LENGTH:size);
-                byte* mem = (byte*) malloc (chunk);
+                uint16_t chunk;
                 while (size>0)
                 {
+                    chunk = (size>LINE_LENGTH?LINE_LENGTH:size);
+                    byte* mem = (byte*) malloc (chunk);
+                    
                     if (size<=chunk)
                         last = true;
                     zdi_read_memory (address,chunk,mem);
@@ -713,9 +898,10 @@ void zdi_process_line ()
                     size-=chunk;
                     if (first)
                         first = false;
+                        
+                    free (mem);
                 }
-                free (mem);
-
+                
                 // restore pc
                 zdi_write_cpu (REG_PC, pc);
 
@@ -724,22 +910,26 @@ void zdi_process_line ()
                     zdi_debug_continue();
             }
             else
-                hal_printf ("\r\n(error, no start address)\r\n#");
+                hal_hostpc_printf ("\r\n(error, no start address)\r\n#");
             break;
         case 'c':
             if (zdi_debug_breakpoint_reached()) // breakpoint?
             {
                 zdi_debug_continue();
-                hal_printf ("\r\n(continue)\r\n#");
+                
+                if (zdi_available_break_point()>0)
+                {
+                    // one or more breakpoints set
+                    hal_hostpc_printf ("\r\n(continue, breakpoint active)\r\n#");
+                }
+                else
+                    hal_hostpc_printf ("\r\n(continue)\r\n#");
             }
             else
-                hal_printf ("\r\n#");
+                hal_hostpc_printf ("\r\n#");
             break;
         case 'r':
-            if (zdi_debug_breakpoint_reached())
-                zdi_debug_status (BREAK);
-            else
-                zdi_debug_status (RUN);
+            zdi_debug_status (REGONLY);
             break;
         case 'R':
             zdi_reset ();
@@ -752,16 +942,17 @@ void zdi_process_line ()
                 zdi_debug_status (STEP);
             }
             else    
-                hal_printf ("\r\n#");
+                hal_hostpc_printf ("\r\n#");
             break;
         case ':':
             if (charcnt>=1+2+4+2+2)
             {
+                //hal_hostpc_printf (szLine);
                 zdi_intel_hex_to_bin (szLine,charcnt);
-                //hal_printf ("\r\n#");
+                //hal_hostpc_printf ("\r\n#");
             }
             else
-                hal_printf ("\r\n(wrong Intel Hex format)\r\n#");
+                hal_hostpc_printf ("\r\n(wrong Intel Hex format)\r\n#");
             break;
         case 'a':
             zdi_debug_break ();
@@ -840,26 +1031,26 @@ void zdi_process_line ()
             begin=strtoul (pBegin,&pEnd,16);
             if (*pEnd == '\0')
             {
-                hal_printf ("\r\n(invalid syntax)\r\n#");
+                hal_hostpc_printf ("\r\n(invalid syntax)\r\n#");
                 break;
             }
             end=strtoul (pEnd,&pStart,16);
             if (*pStart == '\0')
             {
-                hal_printf ("\r\n(invalid syntax)\r\n#");
+                hal_hostpc_printf ("\r\n(invalid syntax)\r\n#");
                 break;
             }
             start=strtoul (pStart,&pFilename,16);
             if (*pFilename == '\0')
             {
-                hal_printf ("\r\n(invalid syntax)\r\n#");
+                hal_hostpc_printf ("\r\n(invalid syntax)\r\n#");
                 break;
             }
             pFilename++;
-            hal_printf ("\r\nWriting memory from: %06X to: %06X starting: %06x to file: %s\r\n#",begin,end,start,pFilename);
+            hal_hostpc_printf ("\r\nWriting memory from: %06X to: %06X starting: %06x to file: %s\r\n#",begin,end,start,pFilename);
             break;
         default:
-            hal_printf ("\r\n(unknown command)\r\n#");
+            hal_hostpc_printf ("\r\n(unknown command)\r\n#");
             break;
     }
 }
@@ -868,7 +1059,7 @@ void zdi_process_cmd (uint8_t key)
     switch (key)
     {
         case 0x08: // backspace
-            hal_printf ("%c %c",key,key);
+            hal_hostpc_printf ("%c %c",key,key);
             szLine[--charcnt]='\0';
             break;
         case 'q':
@@ -891,7 +1082,7 @@ void zdi_process_cmd (uint8_t key)
         default:
             // echo characters and add to line buffer
             if (!ihexmode)
-                hal_printf ("%c",key);
+                hal_hostpc_printf ("%c",key);
             if (charcnt<sizeof (szLine))
                 szLine[charcnt++]=key;
     }

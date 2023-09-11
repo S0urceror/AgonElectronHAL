@@ -10,7 +10,7 @@
 #include "hal.h"
 
 HardwareSerial host_serial(0);
-fabgl::Terminal* fabgl_terminal;
+fabgl::Terminal* fabgl_terminal=nullptr;
 
 void hal_ez80_serial_init ()
 {
@@ -20,26 +20,14 @@ void hal_ez80_serial_init ()
 	ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_CTS_RTS);			// Can be called whenever
 }
 
-void hal_hostpc_serial_init (fabgl::Terminal* term)
+void hal_hostpc_serial_init ()
+{
+	//host_serial.begin(115200, SERIAL_8N1, 3, 1);
+	host_serial.begin(460800, SERIAL_8N1, 3, 1);
+}
+void hal_set_terminal (fabgl::Terminal* term)
 {   
     fabgl_terminal = term;
-	host_serial.begin(115200, SERIAL_8N1, 3, 1);
-	//host_serial.begin(460800, SERIAL_8N1, 3, 1);
-}
-// print both on the Terminal and the connecting Host via serial (if any)
-void hal_printf (const char* format, ...) {
-	va_list ap;
-   	va_start(ap, format);
-   	int size = vsnprintf(nullptr, 0, format, ap) + 1;
-   	if (size > 0) {
-    	va_end(ap);
-     	va_start(ap, format);
-     	char buf[size + 1];
-     	vsnprintf(buf, size, format, ap);
-     	host_serial.print(buf);
-        fabgl_terminal->write (buf);
-   	}
-   	va_end(ap);
 }
 char hal_hostpc_serial_read ()
 {
@@ -47,4 +35,36 @@ char hal_hostpc_serial_read ()
 		return host_serial.read();
 	}
 	return 0;
+}
+
+void _hal_printf (uint8_t dest, const char* format, va_list ap) {
+	char buf[255];
+	vsnprintf(buf, sizeof(buf), format, ap);
+	// print to host PC and/or fabgl terminal
+	if (dest & 0b00000010)
+		host_serial.print(buf);
+	if (fabgl_terminal!=nullptr && (dest & 0b00000001))
+		fabgl_terminal->write (buf);
+}
+
+// print both on the Terminal and the connecting Host via serial (if any)
+void hal_printf (const char* format, ...) {
+	va_list args;
+	va_start(args,format);
+	_hal_printf (0b11,format,args);
+	va_end (args);
+}
+
+void hal_hostpc_printf (const char* format, ...) {
+	va_list args;
+	va_start(args,format);
+	_hal_printf (0b10,format,args);
+	va_end (args);
+}
+
+void hal_terminal_printf (const char* format, ...) {
+	va_list args;
+	va_start(args,format);
+	_hal_printf (0b01,format,args);
+	va_end (args);
 }

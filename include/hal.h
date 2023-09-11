@@ -17,19 +17,13 @@
 
 #define GPIO_ITRP       17 // VSync Interrupt Pin - for reference only
 
-#ifdef MOS_COMPATIBILITY
-const byte PACKET_KEYCODE	= 0x01;	// Keyboard data
-const byte PACKET_SCRCHAR   = 0x03;
-const byte PACKET_MODE      = 0x06;
-const byte PACKET_CURSOR    = 0x02;
-const byte PACKET_GP        = 0x00; // general poll data
-#endif
-
 extern HardwareSerial hal_serial;
-extern fabgl::Terminal* fabgl_terminal;
 
 void hal_printf (const char* format, ...);
-void hal_hostpc_serial_init (fabgl::Terminal*);
+void hal_hostpc_printf (const char* format, ...);
+void hal_terminal_printf (const char* format, ...);
+void hal_hostpc_serial_init ();
+void hal_set_terminal (fabgl::Terminal*);
 char hal_hostpc_serial_read ();
 void hal_ez80_serial_init ();
 

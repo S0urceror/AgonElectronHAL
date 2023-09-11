@@ -11,15 +11,10 @@
 #include "fabgl.h"
 #include "hal.h"
 #include "zdi.h"
-#ifdef MOS_COMPATIBILITY
-#pragma message ("Building MOS compatible version of Electron HAL")
-#include "mos.h"
-#else
 #pragma message ("Building a Electron OS compatible version of Electron HAL")
 #include "eos.h"
 #include "tms9918.h"
 #include "ay_3_8910.h"
-#endif
 
 fabgl::PS2Controller        ps2;
 fabgl::VGADirectController  display_direct;
@@ -51,60 +46,7 @@ void do_keys_hostpc ()
                 zdi_process_cmd (ch);
             else
             {
-                #ifdef HW_FLOW_CONTROL_TEST
-                // BAUDRATE and HW FLOW_CONTROL TEST
-                if (ch=='+') 
-                {
-                    int amount = 65536;
-                    hal_printf ("Sending %d bytes (R=receive, E=error): \r\n",amount);
-                    long int t1 = millis();
-                    for (int cnt=0;cnt<amount;cnt++)
-                        ez80_serial.write ((byte)cnt);
-                    long int t2 = millis();
-                    hal_printf ("This took: %ld milliseconds\r\n",t2-t1);
-                    hal_printf ("Send speed: %ld bits/sec\r\n",((amount*8*1000) / (t2-t1)));
-                }
-                else if  (ch=='-')
-                {
-                    int amount = 0;
-                    bool firsttime = true;
-                    hal_printf ("Receiving byte stream\r\n");
-                    ez80_serial.write ('\0');
-                    ez80_serial.write ('\0');
-                    long int t1 = millis();
-                    byte b = 0;
-                    while (!ez80_serial.available());
-                    while (true)
-                    {
-                        ch = ez80_serial.read();
-                        if (ch==0)
-                        {
-                            b=0;
-                            if (firsttime)
-                                firsttime = false;
-                            else
-                                break;
-                        }
-                        else
-                            firsttime = true;
-                        if (ch!=b)
-                            hal_printf ("E");
-                        b++;
-                        amount++;
-
-                    }
-                    long int t2 = millis();
-                    hal_printf ("Received %d bytes\r\n",amount);
-                    hal_printf ("This took: %ld milliseconds\r\n",t2-t1);
-                    hal_printf ("Receive speed: %ld bits/sec\r\n",((amount*8*1000) / (t2-t1)));
-                }
-                else
-                #endif
-                #ifdef MOS_COMPATIBILITY
-                    mos_send_character (ch);
-                #else
-                    ez80_serial.write(ch);
-                #endif
+                ez80_serial.write(ch);
             }
         }
 	} 
@@ -177,12 +119,13 @@ void do_keys_ps2 ()
     if(kb->getNextVirtualKey(&item, 0)) 
     {
         // CTRL-Z?
-        if (!zdi_mode() && item.ASCII==0x1a && item.down)
-        {
-            zdi_enter ();
-        }
-        else
-        {
+        //if (!zdi_mode() && item.ASCII==0x1a && item.down)
+        //{
+        //    zdi_enter ();
+        //}
+        //else
+        //{
+            /*
             // normal key pressed
             if (zdi_mode())
             {
@@ -192,14 +135,11 @@ void do_keys_ps2 ()
             }
             else
             {
-                #ifdef MOS_COMPATIBILITY
-                mos_send_virtual_key (item);
-                #else
+            */
                 if (item.down)
                     ez80_serial.write(item.ASCII);
-                #endif
-            }
-        }
+            //}
+        //}
     }
 }
 
@@ -211,9 +151,6 @@ void boot_screen()
     terminal.write("\e[1;1H");   // move cursor to 1,1
     
     hal_printf("Electron - HAL - version %d.%d.%d\r\n",HAL_major,HAL_minor,HAL_revision);
-    #ifdef MOS_COMPATIBILITY
-    hal_printf("\r\nLimited MOS RC4 support\r\n\n");
-    #endif
 }
 
 void setup()
@@ -231,8 +168,11 @@ void setup()
     // setup VGA display
     set_display_normal ();
 
-    // setup serial to hostpc and link to terminal
-    hal_hostpc_serial_init (&terminal);
+    // setup serial to hostpc
+    hal_hostpc_serial_init ();
+
+    // let hal know what our terminal is
+    hal_set_terminal (&terminal);
 }
 
 void process_character (byte c)
@@ -247,9 +187,6 @@ void process_character (byte c)
     {
         // normal ASCII?
         hal_printf ("%c",c);
-        #ifdef MOS_COMPATIBILITY
-        mos_col_right();
-        #endif
     }
     else
     {
@@ -258,17 +195,11 @@ void process_character (byte c)
         {
             case '\r':
             case '\n':
-                #ifdef MOS_COMPATIBILITY
-                mos_set_column (1);
-                #endif
             case 0x07: // BELL
                 hal_printf ("%c",c);
                 break;
             case 0x08: // backspace
             case 0x7f:
-                #ifdef MOS_COMPATIBILITY
-                mos_col_left ();
-                #endif
                 hal_printf ("\b \b");
                 break;
             case 0x09: // TAB
@@ -276,21 +207,12 @@ void process_character (byte c)
                 break;
             case 0x0c: // formfeed
                 terminal.clear ();
-                #ifdef MOS_COMPATIBILITY
-                mos_set_column (1);
-                #endif
                 break;
-            #ifdef MOS_COMPATIBILITY
-            case 0x17: // MOS escape code 23
-                mos_handle_escape_code ();
-                break;
-            #else
             case CTRL_Z:
                 break;
             case ESC:
                 ignore_escape=true;
                 break;
-            #endif
             default:
                 hal_printf ("ERR:0x%02X;",c);
                 break;
@@ -349,14 +271,10 @@ void loop()
 {
     boot_screen();
 
-    #ifdef MOS_COMPATIBILITY
-    mos_init ();
-    #else
     if (!eos_wakeup ())
     {
         hal_printf ("Electron - OS - not running\r\n");
     }
-    #endif
 
     while (1)
     {

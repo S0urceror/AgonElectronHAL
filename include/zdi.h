@@ -236,7 +236,8 @@ typedef enum
 {
     BREAK,
     STEP,
-    RUN
+    RUN,
+    REGONLY
 } debug_state_t;
 
 // low-level bit stream
