@@ -292,6 +292,14 @@ void TMS9918::draw_screen2 (uint8_t* dest,int scanline)
         sprite_X =          memory[sprite_attributes+1];
         sprite_pattern_nr = memory[sprite_attributes+2];
         sprite_atts =       memory[sprite_attributes+3];
+
+        // do we need to continue with lower priority sprites?
+        if (sprite_Y == 208)
+            break; // last sprite in the series
+        
+        // sprite is actually 1 pixel down
+        sprite_Y++;
+
         // get derived values
         sprite_color_idx =  sprite_atts & 0xf;
         sprite_color =      colors[sprite_color_idx];
@@ -307,10 +315,6 @@ void TMS9918::draw_screen2 (uint8_t* dest,int scanline)
         if (posY < sprite_Y || 
             posY >= sprite_Y+sprite_pixels_size)
             continue; // not visible in this scanline
-        
-        // do we need to continue with lower priority sprites?
-        if (sprite_Y == 208)
-            break; // last sprite in the series
         
         // draw sprite pixels
         //

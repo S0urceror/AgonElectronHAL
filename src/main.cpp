@@ -15,6 +15,7 @@
 #include "eos.h"
 #include "tms9918.h"
 #include "ay_3_8910.h"
+#include "audio_driver.h"
 
 fabgl::PS2Controller        ps2;
 fabgl::VGADirectController  display_direct;
@@ -118,28 +119,50 @@ void do_keys_ps2 ()
     
     if(kb->getNextVirtualKey(&item, 0)) 
     {
-        // CTRL-Z?
-        //if (!zdi_mode() && item.ASCII==0x1a && item.down)
-        //{
-        //    zdi_enter ();
-        //}
-        //else
-        //{
-            /*
-            // normal key pressed
-            if (zdi_mode())
+        // if (item.down) 
+        // {
+        //     switch (item.vk)
+        //     {
+        //         case fabgl::VK_LEFT:
+		// 			ascii = 0x1d;
+		// 			break;
+		// 		case fabgl::VK_RIGHT:
+		// 			ascii = 0x1c;
+		// 			break;
+		// 		case fabgl::VK_DOWN:
+		// 			ascii = 0x1f;
+		// 			break;
+		// 		case fabgl::VK_UP:
+		// 			ascii = 0x1e;
+		// 			break;
+		// 		case fabgl::VK_BACKSPACE:
+		// 			ascii = 0x7F;
+		// 			break;
+        //         default: 
+        //             ascii = item.ASCII;
+        //             break;
+        //     }
+            
+        // }
+        if (item.ASCII!=0)
+        {
+            if (item.down)
+                ez80_serial.write(item.ASCII);
+            if (item.ASCII==0x20) // space
             {
-                // handle keys on the ESP32
-                if (item.down)
-                    zdi_process_cmd (item.ASCII);
+                // send virtual keycode
+                ez80_serial.write(0x80);
+                ez80_serial.write(fabgl::VK_SPACE);
+                ez80_serial.write(item.down?1:0);
             }
-            else
-            {
-            */
-                if (item.down)
-                    ez80_serial.write(item.ASCII);
-            //}
-        //}
+        }
+        else 
+        {
+            // send virtual keycode
+            ez80_serial.write(0x80);
+            ez80_serial.write(item.vk);
+            ez80_serial.write(item.down?1:0);
+        }
     }
 }
 
@@ -167,6 +190,10 @@ void setup()
 
     // setup VGA display
     set_display_normal ();
+
+    // setup audio driver
+    init_audio_driver ();
+    psg.init ();
 
     // setup serial to hostpc
     hal_hostpc_serial_init ();
@@ -262,7 +289,7 @@ void process_cmd (byte ch)
             //hal_printf ("IN A,(%02X) => %02X\r\n",port,value);
             break;
         default:
-            hal_printf ("Received unknown command: %02X\r\n",cmd);
+            hal_printf ("Unsupported in/out to: 0x%02X\r\n",cmd);
             break;
     }
 }

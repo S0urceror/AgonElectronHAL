@@ -1,4 +1,10 @@
 #include "ay_3_8910.h"
+#include "fabgl.h"
+#include "hal.h" 
+#include "audio_driver.h"
+#include "audio_channel.h"
+
+#define PLAY_SOUND_PRIORITY 3
 
 AY_3_8910::AY_3_8910 ()
 {
@@ -14,9 +20,64 @@ AY_3_8910::AY_3_8910 ()
     amplB=0;
     amplC=0;
 }
+
+void AY_3_8910::init ()
+{
+    // tone
+    setWaveform (0,AUDIO_WAVE_SQUARE);
+    setWaveform (1,AUDIO_WAVE_SQUARE);
+    setWaveform (2,AUDIO_WAVE_SQUARE);
+    // noise
+    setWaveform (3,AUDIO_WAVE_AY_3_8910_NOISE);
+    setWaveform (4,AUDIO_WAVE_AY_3_8910_NOISE);
+    setWaveform (5,AUDIO_WAVE_AY_3_8910_NOISE);
+
+    // setWaveform (3,AUDIO_WAVE_SINE);
+    // setWaveform (4,AUDIO_WAVE_SINE);
+    // setWaveform (5,AUDIO_WAVE_SINE);
+}
+
+void AY_3_8910::updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32_t tone_freq, uint32_t noise_freq)
+{
+    if (amp & 0x10 > 0)
+    {
+        // volume envelope switched on
+    }
+    // tone channel
+    if ((mixer & (0b00000001<<channel))==0 && tone_freq > 0)
+    {
+        // on
+        setFrequency (channel,MASTER_FREQUENCY_DIV / tone_freq);
+        setVolume (channel,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+        //hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,tone_freq,MASTER_FREQUENCY_DIV / tone_freq);
+        //hal_hostpc_printf ("%c tone freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / tone_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+    } 
+    else
+    {
+        // off
+        setVolume (channel,0);
+        //hal_hostpc_printf ("%c tone off\r\n",channel+'A');
+    }
+    // noise channel + 3
+    if ((mixer & (0b00001000<<channel))==0 && noise_freq > 0)
+    {
+        // on
+        setFrequency (channel+3,MASTER_FREQUENCY_DIV / noise_freq);
+        setVolume (channel+3,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+        //hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,noise_freq,MASTER_FREQUENCY_DIV / noise_freq);
+        //hal_hostpc_printf ("%c noise freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / noise_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+    } 
+    else
+    {
+        // off
+        setVolume (channel+3,0);
+        //hal_hostpc_printf ("%c noise off\r\n",channel+'A');
+    }
+}
 void AY_3_8910::write (uint8_t port, uint8_t value)
 {
     bool updateA,updateB,updateC = false;
+    uint8_t mixer_diff;
 
     if (port==0xa0)
         register_select = value;
@@ -63,13 +124,21 @@ void AY_3_8910::write (uint8_t port, uint8_t value)
             // Noise generator
             case 0x06:
                 noise = value & 0b00011111;
-                break;
-            // Voice, I/O port control
-            case 0x07:
-                mixer = value;
+                // noise frequency change applies to all channels
                 updateA = true;
                 updateB = true;
                 updateC = true;
+                break;
+            // Voice, I/O port control
+            case 0x07:
+                mixer_diff = mixer ^ value;
+                mixer = value;
+                if (mixer_diff&0b00001001!=0)
+                    updateA = true;
+                if (mixer_diff&0b00010010!=0)
+                    updateB = true;
+                if (mixer_diff&0b00100100!=0)
+                    updateC = true;
                 break;
             // Amplitude, volume control - A
             case 0x08:
@@ -106,34 +175,19 @@ void AY_3_8910::write (uint8_t port, uint8_t value)
     }
 
     // update sound
-    if (updateA && toneA > 0) 
+    if (updateA) 
     {
-        uint32_t freq = 1789772 / 16;
-        freq = freq / toneA;
-        uint8_t amp = amplA;
-        if (mixer & 0b00000001 > 0)
-            amp = 0; // muted
-        //self.audio_channels.start_tone(0,0,amp*16,freq as i16,500); // 0.5 second
+        updateSound (0,mixer,amplA,toneA,noise);
         updateA = false;
     }
-    if (updateB && toneB > 0) 
+    if (updateB) 
     {
-        uint32_t freq = 1789772 / 16;
-        freq = freq / toneB;
-        uint8_t amp = amplB;
-        if (mixer & 0b00000010 > 0)
-            amp = 0; // muted
-        //self.audio_channels.start_tone(0,0,amp*16,freq as i16,500); // 0.5 second
+        updateSound (1,mixer,amplB,toneB,noise);
         updateB = false;
     }
-    if (updateC && toneC > 0) 
+    if (updateC) 
     {
-        uint32_t freq = 1789772 / 16;
-        freq = freq / toneC;
-        uint8_t amp = amplC;
-        if (mixer & 0b00000100 > 0)
-            amp = 0; // muted
-        //self.audio_channels.start_tone(0,0,amp*16,freq as i16,500); // 0.5 second
+        updateSound (2,mixer,amplC,toneC,noise);
         updateC = false;
     }
 }
