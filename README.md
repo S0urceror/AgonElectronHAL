@@ -118,3 +118,11 @@ FF-C000		Internal Data RAM
 01-0000     Flash ROM               External RAM
 00-0000		Flash ROM               External RAM
 ```
+
+## Steps to use Adruino IDE instead of PlatformIO
+* rename `src/main.cpp` to `src/hal.ino`
+* copy contents of `library/` to `src/`
+* rename `src/` to `hal/`
+* edit `platformio.ini` and add `"src_dir = hal"` under the `[platformio]` section
+* install FabGL1.0.9
+then you can compile & upload to your Agon Light
