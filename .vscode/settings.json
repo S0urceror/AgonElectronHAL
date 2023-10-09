@@ -2,6 +2,10 @@
     "cmake.configureOnOpen": false,
     "files.associations": {
         "cstdint": "cpp",
-        "compare": "cpp"
+        "compare": "cpp",
+        "array": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "span": "cpp"
     }
 }

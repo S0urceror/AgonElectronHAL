@@ -3,11 +3,17 @@
 
 #include <stdint.h>
 
+#define MASTER_FREQUENCY 1789772
+#define MASTER_FREQUENCY_DIV (MASTER_FREQUENCY/16)
+#define FABGL_AMPLITUDE_MULTIPLIER (128/16)
+
+
 class AY_3_8910
 {
     public:
         AY_3_8910 ();
 
+        void init ();
         void write (uint8_t port, uint8_t value);
         uint8_t read (uint8_t port);
 
@@ -23,6 +29,8 @@ class AY_3_8910
         uint8_t     amplA;
         uint8_t     amplB;
         uint8_t     amplC;
+
+        void updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32_t tone_freq, uint32_t noise_freq);
 };
 
 #endif // __AY_3_8910_H_

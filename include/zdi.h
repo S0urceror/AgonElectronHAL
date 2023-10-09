@@ -1,9 +1,6 @@
 #ifndef __ZDI_H_
 #define __ZDI_H_
 
-// Board-specific macros for direct GPIO
-#include "OneWire_direct_regtype.h"
-
 #define ZDI_TCK 26
 #define ZDI_TDI 27
 #define ZDI_READ 1
