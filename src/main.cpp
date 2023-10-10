@@ -73,29 +73,36 @@ void IRAM_ATTR drawScanline(void * arg, uint8_t * dest, int scanLine)
     if (scanLine == height) 
     {
         // signal end of screen
-        //vTaskNotifyGiveFromISR(mainTaskHandle, NULL);
+        vTaskNotifyGiveFromISR(mainTaskHandle, NULL);
     }
 }
 
 void set_display_direct ()
 {
+    // destroy old terminal
     terminal.end();
+
+    // destroy old display instance
     if (display)
     {
         display->end();
         display = nullptr;
     }
+    // create new display instance
     display = display_direct.instance ();
+
+    // tell vdp to use the new display
     vdp.set_display((fabgl::VGADirectController*) display);
 
+    // setup new display
     display->begin();
     ((fabgl::VGADirectController*)display)->setScanlinesPerCallBack(scanlinesPerCallback);
     ((fabgl::VGADirectController*)display)->setDrawScanlineCallback(drawScanline);        
-    display->setResolution(QVGA_320x240_60Hz); //VGA_320x200_70Hz
+    display->setResolution(QVGA_320x240_60Hz);
 
     // setup terminal
     terminal.begin(display);
-    terminal.enableCursor(true);
+    //terminal.enableCursor(true);
 }
 
 void set_display_normal ()
@@ -119,31 +126,6 @@ void do_keys_ps2 ()
     
     if(kb->getNextVirtualKey(&item, 0)) 
     {
-        // if (item.down) 
-        // {
-        //     switch (item.vk)
-        //     {
-        //         case fabgl::VK_LEFT:
-		// 			ascii = 0x1d;
-		// 			break;
-		// 		case fabgl::VK_RIGHT:
-		// 			ascii = 0x1c;
-		// 			break;
-		// 		case fabgl::VK_DOWN:
-		// 			ascii = 0x1f;
-		// 			break;
-		// 		case fabgl::VK_UP:
-		// 			ascii = 0x1e;
-		// 			break;
-		// 		case fabgl::VK_BACKSPACE:
-		// 			ascii = 0x7F;
-		// 			break;
-        //         default: 
-        //             ascii = item.ASCII;
-        //             break;
-        //     }
-            
-        // }
         if (item.ASCII!=0)
         {
             if (item.down)
@@ -178,6 +160,8 @@ void boot_screen()
 
 void setup()
 {
+    mainTaskHandle = xTaskGetCurrentTaskHandle();
+
     // Disable the watchdog timers
     disableCore0WDT(); delay(200);								
 	disableCore1WDT(); delay(200);

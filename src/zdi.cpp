@@ -977,6 +977,7 @@ void zdi_cmd_initialize_EZ80 ()
     zdi_read_cpu (SET_ADL);
     zdi_cpu_instruction_di ();
     // configure default GPIO
+    // no interrupt, input mode, high impedance
     zdi_cpu_instruction_out (PB_DDR, 0xff);
     zdi_cpu_instruction_out (PC_DDR, 0xff);
     zdi_cpu_instruction_out (PD_DDR, 0xff);

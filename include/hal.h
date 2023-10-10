@@ -28,7 +28,7 @@ char hal_hostpc_serial_read ();
 void hal_ez80_serial_init ();
 
 #define	HAL_major		0
-#define	HAL_minor		1
+#define	HAL_minor		5
 #define	HAL_revision 	0
 
 

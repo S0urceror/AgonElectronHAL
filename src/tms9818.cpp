@@ -22,6 +22,7 @@ TMS9918::TMS9918 ()
     sprite_attribute_table = 0;
     sprite_pattern_table = 0;
     textmode_colors = 0;
+    display = nullptr;
 
     memset (memory,0,sizeof(memory));
 }
@@ -30,17 +31,17 @@ void TMS9918::init_mode ()
     switch (mode) 
     {
         case 0b000 :
-            hal_printf ("Graphics I Mode\r\n");
+            //hal_printf ("Graphics I Mode\r\n");
             break;
         case 0b100 :
-            hal_printf ("Graphics II Mode\r\n");
+            //hal_printf ("Graphics II Mode\r\n");
             set_display_direct ();
             break;
         case 0b010 :
-            hal_printf ("Multicolor Mode\r\n");
+            //hal_printf ("Multicolor Mode\r\n");
             break;
         case 0b001 :
-            hal_printf ("Text Mode\r\n");
+            //hal_printf ("Text Mode\r\n");
             break;
         default:
             break;
@@ -59,14 +60,14 @@ void TMS9918::write_register (uint8_t reg, uint8_t value)
         case 0:
             newmode = data_register & 0b00001110;
             newmode = newmode << 1;
-            oldmode = mode;
+            //oldmode = mode;
             // clear all upper mode bits
             mode = mode & 0b00000011;
             // set new upper mode bits
             mode = mode | newmode;
             // have we selected a new mode?
-            if (oldmode!=mode) 
-                init_mode ();
+            //if (oldmode!=mode) 
+            //    init_mode ();
             break;
         case 1:
             // handle the mode changes
@@ -90,46 +91,46 @@ void TMS9918::write_register (uint8_t reg, uint8_t value)
             sprite_size_16 =    (data_register & 0b00000010) > 0;
             sprite_magnify =    (data_register & 0b00000001) > 0;
             
-            if (mem16kb)            hal_printf("16kB VRAM\r\n");
-            if (screen_enable)      hal_printf("screen enabled\r\n");
-            if (interrupt_enable)   hal_printf("VDP interrupts enabled\r\n");
-            if (sprite_size_16)     hal_printf("16x16 sprites\r\n");
-            else                    hal_printf("8x8 sprites\r\n");
-            if (sprite_magnify)     hal_printf("magnified sprites\r\n");
+            //if (mem16kb)            hal_printf("16kB VRAM\r\n");
+            //if (screen_enable)      hal_printf("screen enabled\r\n");
+            //if (interrupt_enable)   hal_printf("VDP interrupts enabled\r\n");
+            //if (sprite_size_16)     hal_printf("16x16 sprites\r\n");
+            //else                    hal_printf("8x8 sprites\r\n");
+            //if (sprite_magnify)     hal_printf("magnified sprites\r\n");
             break;
         case 2:
             nametable = data_register;
             nametable = nametable << 10;
             nametable = nametable & 0x3fff;
-            hal_printf("nametable: %04X\r\n",nametable);
+            //hal_printf("nametable: %04X\r\n",nametable);
             break;
         case 3:
             colortable = data_register;
             colortable = colortable << 6;
             colortable = colortable & 0x3fff;
-            hal_printf("colortable: %04X\r\n",colortable);
+            //hal_printf("colortable: %04X\r\n",colortable);
             break;
         case 4:
             patterntable = data_register;
             patterntable = patterntable << 11;
             patterntable = patterntable & 0x3fff;
-            hal_printf("patterntable: %04X\r\n",patterntable);
+            //hal_printf("patterntable: %04X\r\n",patterntable);
             break;
         case 5:
             sprite_attribute_table = data_register;
             sprite_attribute_table = sprite_attribute_table << 7;
             sprite_attribute_table = sprite_attribute_table & 0x3fff;
-            hal_printf("sprite_attribute_table: %04X\r\n",sprite_attribute_table);
+            //hal_printf("sprite_attribute_table: %04X\r\n",sprite_attribute_table);
             break;
         case 6:
             sprite_pattern_table = data_register;
             sprite_pattern_table = sprite_pattern_table << 11;
             sprite_pattern_table = sprite_pattern_table & 0x3fff;
-            hal_printf("sprite_pattern_table: %04X\r\n",sprite_pattern_table);
+            //hal_printf("sprite_pattern_table: %04X\r\n",sprite_pattern_table);
             break;
         case 7:
             textmode_colors = data_register;
-            hal_printf("textmode colors: %02X\r\n",textmode_colors);
+            //hal_printf("textmode colors: %02X\r\n",textmode_colors);
             break;
         default:
             break;
@@ -297,7 +298,7 @@ void TMS9918::draw_screen2 (uint8_t* dest,int scanline)
         if (sprite_Y == 208)
             break; // last sprite in the series
         
-        // sprite is actually 1 pixel down
+        // sprite is actually 1 pixel lower
         sprite_Y++;
 
         // get derived values
@@ -306,15 +307,18 @@ void TMS9918::draw_screen2 (uint8_t* dest,int scanline)
         fgcolor = display->createRawPixel(sprite_color); 
         sprite_pixels_size= sprite_size_16?16:8;
 
+        // resize sprite when magnified
         if (sprite_magnify)
             sprite_pixels_size = sprite_pixels_size * 2;
         
-        // sprite visible on this scanline?
-        if (sprite_color_idx == 0)
-            continue; // transparent sprite is invisible
+        // is sprite visible on this scanline?
         if (posY < sprite_Y || 
             posY >= sprite_Y+sprite_pixels_size)
-            continue; // not visible in this scanline
+            continue; // not visible
+
+        // is sprite transparent colour?
+        if (sprite_color_idx == 0)
+            continue; // not visible
         
         // draw sprite pixels
         //
@@ -345,6 +349,10 @@ void TMS9918::draw_screen3 (uint8_t* dest,int scanline)
 
 void TMS9918::draw_screen (uint8_t* dest,int scanline)
 {
+    // not set up yet
+    if (display==nullptr)
+        return;
+
     switch (mode) 
     {
         case 0b001 :
