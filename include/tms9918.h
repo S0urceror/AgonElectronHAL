@@ -12,8 +12,12 @@ class TMS9918
         uint8_t read (uint8_t port);
         void draw_screen (uint8_t* dest,int scanline);
         void set_display (fabgl::VGADirectController* dsply);
+        void toggle_enable ();
+        void cycle_screen2_debug ();
 
     private:
+        int screen2_debug_view;
+        bool display_enabled;
         uint8_t registers [8];
         uint8_t memory [16*1024];
         uint8_t data_register;
@@ -40,6 +44,11 @@ class TMS9918
         const uint16_t vdp_height=192;
         const uint8_t  screen_border_vert=(screen_height - vdp_height)/2;
         const uint8_t  screen_border_horz=(screen_width - vdp_width)/2;
+        uint16_t memory_bytes_written;
+        uint16_t memory_bytes_read;
+        uint16_t write_address_start;
+        uint16_t read_address_start;
+        uint8_t frame_counter;
 
         const fabgl::RGB222 colors [16] = {
             RGB222(0x00, 0x00, 0x00), //0 - transparent
@@ -64,6 +73,9 @@ class TMS9918
         void draw_screen0 (uint8_t* dest,int scanline);
         void draw_screen1 (uint8_t* dest,int scanline);
         void draw_screen2 (uint8_t* dest,int scanline);
+        void draw_screen2_patterns (uint8_t* dest,int scanline);
+        void draw_screen2_colours (uint8_t* dest,int scanline);
+        void draw_screen2_nametable_indexes (uint8_t* dest,int scanline);
         void draw_screen3 (uint8_t* dest,int scanline);
 };
 

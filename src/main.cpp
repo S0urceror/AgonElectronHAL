@@ -9,6 +9,7 @@
  */
 
 #include "fabgl.h"
+#include "globals.h"
 #include "hal.h"
 #include "zdi.h"
 #pragma message ("Building a Electron OS compatible version of Electron HAL")
@@ -35,10 +36,20 @@ void do_keys_hostpc ()
     // characters in the buffer?
     if((ch=hal_hostpc_serial_read())>0) 
     {
-        if (!zdi_mode() && ch==0x1a) 
+        if (!zdi_mode() && ch==CTRL_Z) 
         {
             // CTRL-Z?
             zdi_enter();
+        }
+        else if (ch==CTRL_Y)
+        {
+            // CTRL-Y
+            vdp.toggle_enable ();
+        }
+        else if (ch==CTRL_X)
+        {
+            // CTRL-Y
+            vdp.cycle_screen2_debug ();
         }
         else
         {
@@ -108,11 +119,17 @@ void set_display_direct ()
 void set_display_normal ()
 {
     if (display)
+    {
         display->end();
+        display = nullptr;
+    }
 
     display = display_normal.instance ();
     display->begin();
     display->setResolution(VGA_640x480_60Hz);
+
+    // tell vdp to not use the display
+    vdp.set_display((fabgl::VGADirectController*) nullptr);
 
     // setup terminal
     terminal.begin(display);
@@ -132,7 +149,7 @@ void do_keys_ps2 ()
                 ez80_serial.write(item.ASCII);
             if (item.ASCII==0x20) // space
             {
-                // send virtual keycode
+                // also send virtual keycode (for SNSMAT)
                 ez80_serial.write(0x80);
                 ez80_serial.write(fabgl::VK_SPACE);
                 ez80_serial.write(item.down?1:0);
@@ -140,7 +157,7 @@ void do_keys_ps2 ()
         }
         else 
         {
-            // send virtual keycode
+            // send virtual keycode (for SNSMAT)
             ez80_serial.write(0x80);
             ez80_serial.write(item.vk);
             ez80_serial.write(item.down?1:0);

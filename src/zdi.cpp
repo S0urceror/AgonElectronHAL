@@ -1129,7 +1129,7 @@ void zdi_process_cmd (uint8_t key)
             szLine[--charcnt]='\0';
             break;
         case 'q':
-        case 0x1b: // escape
+        case ESC: // escape
             zdi_exit();
             break;
         case '\r': // carriage return

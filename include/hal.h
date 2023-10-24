@@ -17,6 +17,11 @@
 
 #define GPIO_ITRP       17 // VSync Interrupt Pin - for reference only
 
+#define ESC 0x1b
+#define CTRL_X 0x18
+#define CTRL_Y 0x19
+#define CTRL_Z 0x1a
+
 extern HardwareSerial hal_serial;
 
 void hal_printf (const char* format, ...);
@@ -26,10 +31,6 @@ void hal_hostpc_serial_init ();
 void hal_set_terminal (fabgl::Terminal*);
 char hal_hostpc_serial_read ();
 void hal_ez80_serial_init ();
-
-#define	HAL_major		0
-#define	HAL_minor		5
-#define	HAL_revision 	0
 
 
 #endif
