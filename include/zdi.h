@@ -3,6 +3,7 @@
 
 #define ZDI_TCK 26
 #define ZDI_TDI 27
+
 #define ZDI_READ 1
 #define ZDI_WRITE 0
 #define ZDI_CMD_CONTINUE 0

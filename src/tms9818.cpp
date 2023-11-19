@@ -3,6 +3,32 @@
 #include "hal.h"
 #include "globals.h"
 
+const int scanlinesPerCallback=2;
+static void IRAM_ATTR drawScanline(void * arg, uint8_t * dest, int scanLine)
+{
+    TMS9918* vdp = (TMS9918*) arg;
+    auto width  = ((fabgl::VGADirectController*)display)->getScreenWidth();
+    auto height = ((fabgl::VGADirectController*)display)->getScreenHeight();
+
+    // draws "scanlinesPerCallback" scanlines every time drawScanline() is called
+    for (int i = 0; i < scanlinesPerCallback; ++i) 
+    {
+        vdp->draw_screen (dest,scanLine);
+        
+        // go to next scanline
+        ++scanLine;
+        dest += width;
+    }
+
+    // give signal to main loop to continue
+    //
+    if (scanLine == height) 
+    {
+        // signal end of screen
+        vTaskNotifyGiveFromISR(mainTaskHandle, NULL);
+    }
+}
+
 TMS9918::TMS9918 ()
 {
     status_register = 0;
@@ -279,6 +305,12 @@ uint8_t TMS9918::read (uint8_t port)
 void TMS9918::set_display (fabgl::VGADirectController* dsply)
 {
     display = dsply;
+
+    if (display!=nullptr)
+    {
+        display->setScanlinesPerCallBack(scanlinesPerCallback);
+        display->setDrawScanlineCallback(drawScanline,this);    
+    }
 }
 
 void TMS9918::draw_screen0 (uint8_t* dest,int scanline)
@@ -1071,4 +1103,5 @@ void TMS9918::cycle_screen2_debug ()
     screen2_debug_view++;
     if (screen2_debug_view>3)
         screen2_debug_view=0;
+    hal_terminal_printf ("\r\n(screen2 debug %d)\r\n*",screen2_debug_view);
 }
