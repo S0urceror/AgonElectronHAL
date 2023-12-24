@@ -17,6 +17,7 @@
 #include "tms9918.h"
 #include "ay_3_8910.h"
 #include "audio_driver.h"
+#include "updater.h"
 
 fabgl::PS2Controller        ps2;
 fabgl::VGABaseController*	display = nullptr;
@@ -26,6 +27,33 @@ AY_3_8910                   psg;
 bool                        ignore_escape = false;
 bool                        display_mode_direct=false;
 TaskHandle_t                mainTaskHandle;
+vdu_updater                 updater;
+                    
+
+#define VDU_SYSTEM          0
+#define VDU_GP              0x80
+#define VDU_CURSOR          0x82
+#define VDU_SCRCHAR         0x83
+#define VDU_MODE            0x86
+#define VDU_UPDATE          0xA1
+#define OS_UNKNOWN          0
+#define OS_MOS              1
+#define OS_ELECTRON         2
+uint8_t os_identifier   =   OS_UNKNOWN;
+
+#define PACKET_GP       0x00	// General poll data
+#define PACKET_KEYCODE  0x01
+#define PACKET_CURSOR   0x02
+#define PACKET_SCRCHAR  0x03
+#define PACKET_MODE     0x06
+
+void send_packet(uint8_t code, uint16_t len, uint8_t data[]) {
+	ez80_serial.write(code + 0x80);
+	ez80_serial.write(len);
+	for (int i = 0; i < len; i++) {
+		ez80_serial.write(data[i]);
+	}
+}
 
 void boot_screen()
 {
@@ -33,8 +61,8 @@ void boot_screen()
     terminal->write("\e[44;37m"); // background: blue, foreground: white
     terminal->write("\e[2J");     // clear screen
     terminal->write("\e[1;1H");   // move cursor to 1,1
-    
-    hal_printf("Electron - HAL - version %d.%d.%d\r\n",HAL_major,HAL_minor,HAL_revision);
+
+    hal_printf("\r\nElectron - HAL - version %d.%d.%d\r\n",HAL_major,HAL_minor,HAL_revision);
 }
 
 void set_display_direct ()
@@ -102,7 +130,6 @@ void set_display_normal (bool force)
     //hal_hostpc_printf ("display set to NORMAL\r\n");
 }
 
-
 void do_serial_hostpc ()
 {
     byte ch;
@@ -116,20 +143,20 @@ void do_serial_hostpc ()
                 // CTRL-Z?
                 zdi_enter();
             }
-            else if (ch==CTRL_Y)
-            {
-                // CTRL-Y
-                vdp.toggle_enable ();
-            }
-            else if (ch==CTRL_X)
-            {
-                // CTRL-X
-                //vdp.cycle_screen2_debug ();
-                if (display_mode_direct)
-                    set_display_normal ();
-                else
-                    set_display_direct ();
-            }
+            // else if (ch==CTRL_Y)
+            // {
+            //     // CTRL-Y
+            //     vdp.toggle_enable ();
+            // }
+            // else if (ch==CTRL_X)
+            // {
+            //     // CTRL-X
+            //     //vdp.cycle_screen2_debug ();
+            //     if (display_mode_direct)
+            //         set_display_normal ();
+            //     else
+            //         set_display_direct ();
+            // }
             else
             {
                 if (zdi_mode())
@@ -137,7 +164,21 @@ void do_serial_hostpc ()
                     zdi_process_cmd (ch);
                 else
                 {
-                    ez80_serial.write(ch);
+                    // MOS wants a whole packet for 1 character
+                    // allows to detect special key combo's
+                    if (os_identifier==OS_MOS)
+                    {
+                        uint8_t packet[] = {
+                            ch,
+                            0,
+                            0,
+                            1,
+                        };
+                        send_packet(PACKET_KEYCODE, sizeof packet, packet);
+                    }
+                    else 
+                        // ElectronOS is simpler, just send the character
+                        ez80_serial.write(ch);
                 }
             }
         } 
@@ -153,24 +194,49 @@ void do_keys_ps2 ()
     
     if(kb->getNextVirtualKey(&item, 0)) 
     {
-        if (item.ASCII!=0)
+        // MOS wants a whole packet
+        // allows to detect special key combo's
+        if (os_identifier==OS_MOS)
         {
-            if (item.down)
-                ez80_serial.write(item.ASCII);
-            if (item.ASCII==0x20) // space
-            {
-                // also send virtual keycode (for SNSMAT)
-                ez80_serial.write(0x80);
-                ez80_serial.write(fabgl::VK_SPACE);
-                ez80_serial.write(item.down?1:0);
-            }
+            uint8_t modifier =  item.CTRL		<< 0 |
+                                item.SHIFT		<< 1 |
+                                item.LALT		<< 2 |
+                                item.RALT		<< 3 |
+                                item.CAPSLOCK	<< 4 |
+                                item.NUMLOCK	<< 5 |
+                                item.SCROLLLOCK << 6 |
+                                item.GUI		<< 7;
+            uint8_t packet[] = {
+                item.ASCII,
+                modifier,
+                item.vk,
+                item.down,
+            };
+            send_packet(PACKET_KEYCODE, sizeof packet, packet);
         }
         else 
         {
-            // send virtual keycode (for SNSMAT)
-            ez80_serial.write(0x80);
-            ez80_serial.write(item.vk);
-            ez80_serial.write(item.down?1:0);
+            // ElectronOS gets just the ASCII code
+            // only special keys get send differently (disabled command mode for now)
+            if (item.ASCII!=0)
+            {
+                if (item.down)
+                    ez80_serial.write(item.ASCII);
+                // if (item.ASCII==0x20) // space
+                // {
+                //     // also send virtual keycode (for SNSMAT)
+                //     ez80_serial.write(0x80);
+                //     ez80_serial.write(fabgl::VK_SPACE);
+                //     ez80_serial.write(item.down?1:0);
+                // }
+            }
+            // else 
+            // {
+            //     // send virtual keycode (for SNSMAT)
+            //     ez80_serial.write(0x80);
+            //     ez80_serial.write(item.vk);
+            //     ez80_serial.write(item.down?1:0);
+            // }
         }
     }
 }
@@ -201,11 +267,89 @@ void setup()
 
     // boot screen and wait for ElectronOS on EZ80
     boot_screen();
-    if (!eos_wakeup ())
+    // if (!eos_wakeup ())
+    // {
+    //     hal_printf ("Electron - OS - not running\r\n");
+    //     while (1)
+    //         do_serial_hostpc(); // wait for ZDI mode hotkey to reprogram ElectronOS
+    // }
+}
+
+// Minimal implementation just to make ElectronHAL somewhat compatible with Quark MOS
+// ElectronOS has implemented PACKET_GP to make it operable with Quark VDP.
+// ElectronOS sends a 2 while MOS sends a 1 in this phase. We use this to distinguish both
+void process_vdu ()
+{
+    uint8_t mode,cmd;
+    // read VDU mode ID
+    ez80_serial.readBytes(&mode,1);
+    switch (mode)
     {
-        hal_printf ("Electron - OS - not running\r\n");
-        while (1)
-            do_serial_hostpc(); // wait for ZDI mode hotkey to reprogram ElectronOS
+        case VDU_SYSTEM:
+            ez80_serial.readBytes(&cmd,1);
+            switch (cmd)
+            {
+                case VDU_GP:
+                    // read EZ80 OS identifier
+                    ez80_serial.readBytes(&os_identifier,1);
+                    send_packet(PACKET_GP, sizeof(os_identifier), &os_identifier);
+                    break;
+                case VDU_CURSOR:
+                {
+                    uint8_t cursor_packet[] = { 1, 1 };
+                    send_packet(PACKET_CURSOR, sizeof(cursor_packet), cursor_packet);
+                    break;
+                }
+                case VDU_SCRCHAR: 
+                {				
+                    // VDU 23, 0, &83, x; y;
+                    uint16_t x,y;
+                    uint8_t scrchar=0;
+                    ez80_serial.readBytes((uint8_t*) &x,2);
+                    ez80_serial.readBytes((uint8_t*) &y,2);
+                    // if this is requested after unlocking the updater
+                    // then it's verify the 'unlocked!' response
+                    if (!updater.locked)
+                        scrchar = updater.get_unlock_response(x-8);
+                    uint8_t packet[] = {
+                        scrchar,
+                    };
+	                send_packet(PACKET_SCRCHAR, sizeof packet, packet);
+                    break;
+                }
+                case VDU_MODE:
+                {
+                    int canvasW = 640;
+                    int canvasH = 480;
+                    int fontW = 8,fontH = 8;
+                    uint8_t mode_packet[] = {
+                        (uint8_t) (canvasW & 0xFF),			// Width in pixels (L)
+                        (uint8_t) ((canvasW >> 8) & 0xFF),	// Width in pixels (H)
+                        (uint8_t) (canvasH & 0xFF),			// Height in pixels (L)
+                        (uint8_t) ((canvasH >> 8) & 0xFF),	// Height in pixels (H)
+                        (uint8_t) (canvasW / fontW),		// Width in characters (byte)
+                        (uint8_t) (canvasH / fontH),		// Height in characters (byte)
+                        64,				// Colour depth
+                        0,							// The video mode number
+                    };
+                    send_packet(PACKET_MODE, sizeof mode_packet, mode_packet);
+                    break;
+                }
+                case VDU_UPDATE:
+                {
+                    uint8_t update_mode;
+                    ez80_serial.readBytes(&update_mode,1);
+                    updater.command(update_mode);
+                    break;
+                }
+                default:
+                    hal_printf ("Unknown VDU system command:%d",cmd);
+                    break;
+            }
+            break;       
+        default:
+            hal_printf ("Unknown VDU mode:%d",mode);
+            break;
     }
 }
 
@@ -245,9 +389,6 @@ void process_character (byte c)
                 terminal->clear ();
                 break;
             case CTRL_W:
-                // 8 bits ASCII code transferred
-                c = ez80_serial.read();
-                hal_printf ("%c",c);
                 break;
             case CTRL_Z:
                 break;
@@ -261,7 +402,7 @@ void process_character (byte c)
     }
 }
 
-void process_cmd (uint8_t cmd)
+void process_virtual_io_cmd (uint8_t cmd)
 {
     // strip high bit
     uint8_t subcmd = (cmd & 0b01100000) >> 5;
@@ -380,7 +521,9 @@ void do_serial_ez80 ()
             // read character
             uint8_t ch = (uint8_t) read_character;
             if (ch & 0x80 /*0b10000000*/)
-                process_cmd (ch);
+                process_virtual_io_cmd (ch);
+            else if (ch==CTRL_W)        
+                process_vdu ();          
             else
                 process_character (ch);
         }

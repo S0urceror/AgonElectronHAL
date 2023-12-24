@@ -22,8 +22,6 @@ void hal_ez80_serial_init ()
 
 void hal_hostpc_serial_init ()
 {
-	//host_serial.begin(115200, SERIAL_8N1, 3, 1);
-	//host_serial.begin(460800, SERIAL_8N1, 3, 1);
 	host_serial.begin(500000, SERIAL_8N1, 3, 1);
 }
 void hal_set_terminal (fabgl::Terminal* term)

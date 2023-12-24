@@ -1,0 +1,13 @@
+Unlock:
+VDU 23 0 161 0 117 110 108 111 99 107
+
+Fake upload:
+VDU 23 0 161 1 1 0 0 1 1
+
+Switch:
+VDU 23 0 161 2
+
+Test:
+VDU 23 0 161 3
+
+flash vdp firmware/quark-vdp-1.04.bin

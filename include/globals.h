@@ -2,7 +2,7 @@
 #define __GLOBALS_H_
 
 #define	HAL_major		0
-#define	HAL_minor		7
+#define	HAL_minor		8
 #define	HAL_revision 	0
 
 void set_display_direct ();

@@ -1,0 +1,58 @@
+MOS-VDP combo
+=============
+WAKEUP
+- MOS sends GP packet for some time
+- VDP answers with echo GP packet
+VDP sends raw chars to MOS
+- only in Terminal mode after set by VDP packet
+VDP sends packets to MOS
+- packets have high-bit 7 + cmd nr
+- followed by length
+- followed by bytes
+MOS sends packets or chars to VDP
+- packets start with CTRL-W
+- chars are everything else
+    special care for special chars
+    case 0x20 ... 0x7E:
+	case 0x80 ... 0xFF:
+		plotCharacter(c);
+
+
+
+ELECTRON HAL - OS combo
+========================
+WAKEUP
+- HAL sends ESC to OS
+- OS responds with CTRL-Z
+HAL sends raw chars to OS
+-bit 7 is low + 7 bits ASCII
+HAL sends command to OS
+-bit 7 is high + 7 bits cmd-id
+-00 = VIRTUAL-KEYCODE + UP:0/DOWN:1
+OS sends raw chars to HAL
+OS sends commands to HAL
+-bit 7 is high + 7 bits cmd-id
+-OUTPUT/INPUT/FILL/BLOCKRD/BLOCKWR
+
+
+SOLVED DIFFERENCES:
+===================
+
+MOS - hardware CTS via input pin, no hardware RTS
+=================================================
+PORTD_DDR = 0000 1011
+PORTD_ALT1= 1111 0100
+PORTD_ALT2= 0000 0011
+RX/TX (pins 0,1) are alternative function => UART
+CTS (pin 3) is input
+write waits for CTS becoming Z
+MCTL = 0 (no and reset RTS)
+
+EOS - hardware CTS and RTS
+=================================================
+PORTD_DDR = 0000 1111
+PORTD_ALT1= 1111 0000
+PORTD_ALT2= 0000 1111
+RX/TX/CTS/RTS (pins 0,1,2,3) are alternative function => UART
+write waits for bit4 MSR becoming NZ
+MCTL = 2 (use and set RTS)

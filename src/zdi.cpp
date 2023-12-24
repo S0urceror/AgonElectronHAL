@@ -24,7 +24,7 @@ uint32_t* tck_baseReg = PIN_TO_BASEREG(ZDI_TCK);
 
 extern HardwareSerial host_serial;
 extern void do_keys_ps2 ();
-extern void process_character (byte c);
+extern void do_serial_ez80 ();
 
 // low-level bit stream
 ///////////////////////
@@ -1036,13 +1036,8 @@ void zdi_cmd_wait ()
     {
         // do normal communication with EZ80
         do_keys_ps2();
-        while (ez80_serial.available() > 0)
-        {
-            // read character
-            ch = ez80_serial.read();
-            process_character (ch);
-        }
-
+        do_serial_ez80();
+        
         // check if we reached a breakpoint
         if (zdi_debug_breakpoint_reached())
         {
