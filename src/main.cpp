@@ -82,7 +82,8 @@ void set_display_direct ()
         //terminal->end();    
         // remove terminal from HAL
         hal_set_terminal (nullptr);
-        delete terminal;
+        // TODO: commented out below because deleting terminal turns off SoundGenerator
+        //delete terminal;
     }
     // create new display instance
     display = new fabgl::VGADirectController ();
@@ -143,20 +144,20 @@ void do_serial_hostpc ()
                 // CTRL-Z?
                 zdi_enter();
             }
-            // else if (ch==CTRL_Y)
-            // {
-            //     // CTRL-Y
-            //     vdp.toggle_enable ();
-            // }
-            // else if (ch==CTRL_X)
-            // {
-            //     // CTRL-X
-            //     //vdp.cycle_screen2_debug ();
-            //     if (display_mode_direct)
-            //         set_display_normal ();
-            //     else
-            //         set_display_direct ();
-            // }
+            else if (ch==CTRL_Y)
+            {
+                // CTRL-Y
+                vdp.toggle_enable ();
+            }
+            else if (ch==CTRL_X)
+            {
+                // CTRL-X
+                //vdp.cycle_screen2_debug ();
+                if (display_mode_direct)
+                    set_display_normal ();
+                else
+                    set_display_direct ();
+            }
             else
             {
                 if (zdi_mode())
@@ -222,21 +223,21 @@ void do_keys_ps2 ()
             {
                 if (item.down)
                     ez80_serial.write(item.ASCII);
-                // if (item.ASCII==0x20) // space
-                // {
-                //     // also send virtual keycode (for SNSMAT)
-                //     ez80_serial.write(0x80);
-                //     ez80_serial.write(fabgl::VK_SPACE);
-                //     ez80_serial.write(item.down?1:0);
-                // }
+                if (item.ASCII==0x20) // space
+                {
+                    // also send virtual keycode (for SNSMAT)
+                    ez80_serial.write(0b11000000);
+                    ez80_serial.write(fabgl::VK_SPACE);
+                    ez80_serial.write(item.down?1:0);
+                }
             }
-            // else 
-            // {
-            //     // send virtual keycode (for SNSMAT)
-            //     ez80_serial.write(0x80);
-            //     ez80_serial.write(item.vk);
-            //     ez80_serial.write(item.down?1:0);
-            // }
+            else 
+            {
+                // send virtual keycode (for SNSMAT)
+                ez80_serial.write(0b11000000);
+                ez80_serial.write(item.vk);
+                ez80_serial.write(item.down?1:0);
+            }
         }
     }
 }
@@ -444,8 +445,8 @@ void process_virtual_io_cmd (uint8_t cmd)
                                 //hal_printf ("OUT (%02X), %02X\r\n",port,value);
                                 if (port==0x98 || port==0x99)
                                     vdp.write (port,value);
-                                if (port==0xa0 || port==0xa1)
-                                    psg.write (port,value);
+                                // if (port==0xa0 || port==0xa1)
+                                //     psg.write (port,value);
                             }
                         }
                         //hal_printf ("OUT (%02Xh), xx - %d repeated\r\n",port,i);
@@ -462,8 +463,8 @@ void process_virtual_io_cmd (uint8_t cmd)
                         {
                             if (port==0x98 || port==0x99)
                                 vdp.write (port,value);
-                            if (port==0xa0 || port==0xa1)
-                                psg.write (port,value);
+                            // if (port==0xa0 || port==0xa1)
+                            //     psg.write (port,value);
                         }
                         //hal_printf ("OUT (%02Xh), %02Xh - %d filled\r\n",port,value,i);
                     }
@@ -493,8 +494,8 @@ void process_virtual_io_cmd (uint8_t cmd)
                             //hal_printf ("IN (%02Xh) => %02Xh\r\n",port,value);
                             if (port==0x98 || port==0x99)
                                 value = vdp.read (port);
-                            if (port==0xa2)
-                                value = psg.read (port);
+                            // if (port==0xa2)
+                            //     value = psg.read (port);
 
                             ez80_serial.write(value);
                         }

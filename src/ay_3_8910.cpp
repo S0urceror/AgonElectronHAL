@@ -49,8 +49,8 @@ void AY_3_8910::updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32
         // on
         setFrequency (channel,MASTER_FREQUENCY_DIV / tone_freq);
         setVolume (channel,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
-        //hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,tone_freq,MASTER_FREQUENCY_DIV / tone_freq);
-        //hal_hostpc_printf ("%c tone freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / tone_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+        // hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,tone_freq,MASTER_FREQUENCY_DIV / tone_freq);
+        // hal_hostpc_printf ("%c tone freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / tone_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
     } 
     else
     {
@@ -64,8 +64,8 @@ void AY_3_8910::updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32
         // on
         setFrequency (channel+3,MASTER_FREQUENCY_DIV / noise_freq);
         setVolume (channel+3,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
-        //hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,noise_freq,MASTER_FREQUENCY_DIV / noise_freq);
-        //hal_hostpc_printf ("%c noise freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / noise_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+        // hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,noise_freq,MASTER_FREQUENCY_DIV / noise_freq);
+        // hal_hostpc_printf ("%c noise freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / noise_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
     } 
     else
     {
