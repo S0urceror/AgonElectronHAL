@@ -16,6 +16,8 @@
 #include "eos.h"
 #include "tms9918.h"
 #include "ay_3_8910.h"
+#include "sn76489an.h"
+#include "ppi-8255.h"
 #include "audio_driver.h"
 #include "updater.h"
 
@@ -24,6 +26,8 @@ fabgl::VGABaseController*	display = nullptr;
 fabgl::Terminal*            terminal;
 TMS9918                     vdp;
 AY_3_8910                   psg;
+SN76489AN                   psg2;
+PPI8255                     ppi;
 bool                        ignore_escape = false;
 bool                        display_mode_direct=false;
 TaskHandle_t                mainTaskHandle;
@@ -39,6 +43,7 @@ vdu_updater                 updater;
 #define OS_UNKNOWN          0
 #define OS_MOS              1
 #define OS_ELECTRON         2
+#define OS_ELECTRON_SG1000  3
 uint8_t os_identifier   =   OS_UNKNOWN;
 
 #define PACKET_GP       0x00	// General poll data
@@ -47,7 +52,7 @@ uint8_t os_identifier   =   OS_UNKNOWN;
 #define PACKET_SCRCHAR  0x03
 #define PACKET_MODE     0x06
 
-void send_packet(uint8_t code, uint16_t len, uint8_t data[]) {
+void mos_send_packet(uint8_t code, uint16_t len, uint8_t data[]) {
 	ez80_serial.write(code + 0x80);
 	ez80_serial.write(len);
 	for (int i = 0; i < len; i++) {
@@ -128,7 +133,6 @@ void set_display_normal (bool force)
 
     // hello world
     boot_screen ();
-    //hal_hostpc_printf ("display set to NORMAL\r\n");
 }
 
 void do_serial_hostpc ()
@@ -175,7 +179,7 @@ void do_serial_hostpc ()
                             0,
                             1,
                         };
-                        send_packet(PACKET_KEYCODE, sizeof packet, packet);
+                        mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
                     }
                     else 
                         // ElectronOS is simpler, just send the character
@@ -195,11 +199,7 @@ void do_keys_ps2 ()
     
     if(kb->getNextVirtualKey(&item, 0)) 
     {
-        // MOS wants a whole packet
-        // allows to detect special key combo's
-        if (os_identifier==OS_MOS)
-        {
-            uint8_t modifier =  item.CTRL		<< 0 |
+        uint8_t modifier =  item.CTRL		<< 0 |
                                 item.SHIFT		<< 1 |
                                 item.LALT		<< 2 |
                                 item.RALT		<< 3 |
@@ -207,37 +207,53 @@ void do_keys_ps2 ()
                                 item.NUMLOCK	<< 5 |
                                 item.SCROLLLOCK << 6 |
                                 item.GUI		<< 7;
-            uint8_t packet[] = {
-                item.ASCII,
-                modifier,
-                item.vk,
-                item.down,
-            };
-            send_packet(PACKET_KEYCODE, sizeof packet, packet);
-        }
-        else 
+
+        // MOS wants a whole packet
+        // allows to detect special key combo's
+        switch (os_identifier)
         {
-            // ElectronOS gets just the ASCII code
-            // only special keys get send differently (disabled command mode for now)
-            if (item.ASCII!=0)
+            case OS_MOS:
             {
-                if (item.down)
-                    ez80_serial.write(item.ASCII);
-                if (item.ASCII==0x20) // space
+                uint8_t packet[] = {
+                    item.ASCII,
+                    modifier,
+                    item.vk,
+                    item.down,
+                };
+                mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
+                break;
+            }
+            case OS_ELECTRON_SG1000:
+            {
+                ppi.record_keypress (item.ASCII,modifier,item.vk,item.down);
+                break;
+            }
+            case OS_ELECTRON:
+            {
+                // ElectronOS gets just the ASCII code
+                // only special keys get send differently
+                if (item.ASCII!=0)
                 {
-                    // also send virtual keycode (for SNSMAT)
-                    ez80_serial.write(0b11000000);
-                    ez80_serial.write(fabgl::VK_SPACE);
+                    if (item.down)
+                        ez80_serial.write(item.ASCII);
+                    if (item.ASCII==0x20) // space
+                    {
+                        // also send virtual keycode (for SNSMAT)
+                        ez80_serial.write(0b11000000); // signals command mode
+                        ez80_serial.write(fabgl::VK_SPACE);
+                        ez80_serial.write(item.down?1:0);
+                    }
+                }
+                else 
+                {
+                    // send virtual keycode (for SNSMAT)
+                    ez80_serial.write(0b11000000); // signals command mode
+                    ez80_serial.write(item.vk);
                     ez80_serial.write(item.down?1:0);
                 }
+                break;
             }
-            else 
-            {
-                // send virtual keycode (for SNSMAT)
-                ez80_serial.write(0b11000000);
-                ez80_serial.write(item.vk);
-                ez80_serial.write(item.down?1:0);
-            }
+            
         }
     }
 }
@@ -262,6 +278,7 @@ void setup()
     // setup audio driver
     init_audio_driver ();
     psg.init ();
+    //psg2.init ();
 
     // setup serial to hostpc
     hal_hostpc_serial_init ();
@@ -281,7 +298,7 @@ void setup()
 // ElectronOS sends a 2 while MOS sends a 1 in this phase. We use this to distinguish both
 void process_vdu ()
 {
-    uint8_t mode,cmd;
+    uint8_t mode,cmd,new_os_identifier;
     // read VDU mode ID
     ez80_serial.readBytes(&mode,1);
     switch (mode)
@@ -292,13 +309,25 @@ void process_vdu ()
             {
                 case VDU_GP:
                     // read EZ80 OS identifier
-                    ez80_serial.readBytes(&os_identifier,1);
-                    send_packet(PACKET_GP, sizeof(os_identifier), &os_identifier);
+                    // MOS always sends a 1
+                    // ElectronOS sends a 2, and mimics this behaviour to be somewhat compatible with MOS/VDP
+                    ez80_serial.readBytes(&new_os_identifier,1);
+                    mos_send_packet(PACKET_GP, sizeof(new_os_identifier), &new_os_identifier); // only MOS packet that ElectronOS understands
+                    if (new_os_identifier!=os_identifier)
+                    {
+                        os_identifier = new_os_identifier;
+                        if (os_identifier==OS_MOS)
+                            hal_printf ("MOS personality activated\r\n");
+                        if (os_identifier==OS_ELECTRON)
+                            hal_printf ("Default personality activated\r\n");
+                        if (os_identifier==OS_ELECTRON_SG1000)
+                            hal_printf ("SG1000 personality activated\r\n");
+                    }
                     break;
                 case VDU_CURSOR:
                 {
                     uint8_t cursor_packet[] = { 1, 1 };
-                    send_packet(PACKET_CURSOR, sizeof(cursor_packet), cursor_packet);
+                    mos_send_packet(PACKET_CURSOR, sizeof(cursor_packet), cursor_packet);
                     break;
                 }
                 case VDU_SCRCHAR: 
@@ -315,7 +344,7 @@ void process_vdu ()
                     uint8_t packet[] = {
                         scrchar,
                     };
-	                send_packet(PACKET_SCRCHAR, sizeof packet, packet);
+	                mos_send_packet(PACKET_SCRCHAR, sizeof packet, packet);
                     break;
                 }
                 case VDU_MODE:
@@ -333,7 +362,7 @@ void process_vdu ()
                         64,				// Colour depth
                         0,							// The video mode number
                     };
-                    send_packet(PACKET_MODE, sizeof mode_packet, mode_packet);
+                    mos_send_packet(PACKET_MODE, sizeof mode_packet, mode_packet);
                     break;
                 }
                 case VDU_UPDATE:
@@ -424,10 +453,16 @@ void process_virtual_io_cmd (uint8_t cmd)
                         port = normal_out_req[0];
                         value = normal_out_req[1];
                         
-                        if (port==0x98 || port==0x99)
-                            vdp.write (port,value);
-                        if (port==0xa0 || port==0xa1)
-                            psg.write (port,value);
+                        if (port==0x98 || port==0x99) // MSX TMS9918
+                            vdp.write (port-0x98,value);
+                        if (port==0xa0 || port==0xa1) // MSX AY-3-8910
+                            psg.write (port,value);                            
+                        if (port==0xBE || port==0xBF) // SG-1000 TMS9918
+                            vdp.write (port-0xbe,value);
+                        if (port==0x7e || port==0x7f) // SG-1000 SN76489AN
+                            psg2.write (value);
+                        if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
+                            ppi.write (port-0xdc,value);
                         //hal_printf ("OUT (%02X), %02X\r\n",port,value);
                     }
                     break;
@@ -444,7 +479,7 @@ void process_virtual_io_cmd (uint8_t cmd)
                             {
                                 //hal_printf ("OUT (%02X), %02X\r\n",port,value);
                                 if (port==0x98 || port==0x99)
-                                    vdp.write (port,value);
+                                    vdp.write (port-0x98,value);
                                 // if (port==0xa0 || port==0xa1)
                                 //     psg.write (port,value);
                             }
@@ -462,7 +497,7 @@ void process_virtual_io_cmd (uint8_t cmd)
                         for (i=0;i<repeat_length;i++)
                         {
                             if (port==0x98 || port==0x99)
-                                vdp.write (port,value);
+                                vdp.write (port-0x98,value);
                             // if (port==0xa0 || port==0xa1)
                             //     psg.write (port,value);
                         }
@@ -474,9 +509,13 @@ void process_virtual_io_cmd (uint8_t cmd)
                     if (ez80_serial.readBytes (&port,1)==1)
                     {
                         if (port==0x98 || port==0x99)
-                            value = vdp.read (port);
+                            value = vdp.read (port-0x98);
+                        if (port==0xbe || port==0xbf)
+                            value = vdp.read (port-0xbe);                            
                         if (port==0xa2)
                             value = psg.read (port);
+                        if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
+                            value = ppi.read (port-0xdc);
 
                         ez80_serial.write(value);
                         //hal_printf ("IN A,(%02X) => %02X\r\n",port,value);
@@ -493,7 +532,7 @@ void process_virtual_io_cmd (uint8_t cmd)
                         {
                             //hal_printf ("IN (%02Xh) => %02Xh\r\n",port,value);
                             if (port==0x98 || port==0x99)
-                                value = vdp.read (port);
+                                value = vdp.read (port-0x98);
                             // if (port==0xa2)
                             //     value = psg.read (port);
 

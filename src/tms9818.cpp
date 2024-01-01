@@ -223,7 +223,7 @@ void TMS9918::write_register (uint8_t reg, uint8_t value)
 }
 void TMS9918::write (uint8_t port, uint8_t value)
 {
-    if (port==0x98) 
+    if (port==0x00) 
     {
         // if (!display_enabled)
         // {
@@ -241,7 +241,7 @@ void TMS9918::write (uint8_t port, uint8_t value)
         write_address = (write_address + 1) & 0x3fff;
         memory_bytes_written++;
     }
-    if (port==0x99) 
+    if (port==0x01) 
     {
         if (port99_write == false)
         {
@@ -258,12 +258,12 @@ void TMS9918::write (uint8_t port, uint8_t value)
             // vram write address
             if ((value & 0b11000000) == 0b01000000)
             {
-                if (!display_enabled && memory_bytes_written>0)
-                {
-                    //hal_terminal_printf ("\r\n");
-                    hal_terminal_printf("VDP WR %04X - %04X (%04X)\r\n",write_address_start,write_address,memory_bytes_written);
-                    memory_bytes_written = 0;
-                }
+                // if (!display_enabled && memory_bytes_written>0)
+                // {
+                //     //hal_terminal_printf ("\r\n");
+                //     hal_terminal_printf("VDP WR %04X - %04X (%04X)\r\n",write_address_start,write_address,memory_bytes_written);
+                //     memory_bytes_written = 0;
+                // }
                 uint16_t temp = value & 0b00111111;
                 temp = temp << 8;
                 write_address = temp + data_register;
@@ -272,11 +272,11 @@ void TMS9918::write (uint8_t port, uint8_t value)
             // vram read address
             if ((value & 0b11000000) == 0b00000000)
             {
-                if (!display_enabled && memory_bytes_read>0)
-                {
-                    hal_terminal_printf("VDP RD %04X - %04X (%04X)\r\n",read_address_start,read_address,memory_bytes_read);
-                    memory_bytes_read = 0;
-                }
+                // if (!display_enabled && memory_bytes_read>0)
+                // {
+                //     hal_terminal_printf("VDP RD %04X - %04X (%04X)\r\n",read_address_start,read_address,memory_bytes_read);
+                //     memory_bytes_read = 0;
+                // }
                 uint16_t temp = value & 0b00111111;
                 temp = temp << 8;
                 read_address = temp + data_register;
@@ -288,14 +288,14 @@ void TMS9918::write (uint8_t port, uint8_t value)
 uint8_t TMS9918::read (uint8_t port)
 {
     uint8_t val=0;
-    if (port==0x98) 
+    if (port==0x00) 
     {
         val = memory[read_address];
         read_address = (read_address + 1) & 0x3fff;
         memory_bytes_read++;
         // hal_terminal_printf ("read %02X from %04X\r\n",val, read_address);
     }
-    if (port==0x99) 
+    if (port==0x01) 
     {
         val = status_register;
     }

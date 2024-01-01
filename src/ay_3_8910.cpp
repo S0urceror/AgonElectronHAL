@@ -76,7 +76,7 @@ void AY_3_8910::updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32
 }
 void AY_3_8910::write (uint8_t port, uint8_t value)
 {
-    bool updateA,updateB,updateC = false;
+    bool updateA=false,updateB=false,updateC = false;
     uint8_t mixer_diff;
 
     if (port==0xa0)
