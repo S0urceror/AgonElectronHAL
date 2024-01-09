@@ -44,6 +44,7 @@ vdu_updater                 updater;
 #define OS_MOS              1
 #define OS_ELECTRON         2
 #define OS_ELECTRON_SG1000  3
+#define OS_MOS_FULLDUPLEX   4
 uint8_t os_identifier   =   OS_UNKNOWN;
 
 #define PACKET_GP       0x00	// General poll data
@@ -312,17 +313,31 @@ void process_vdu ()
                     // MOS always sends a 1
                     // ElectronOS sends a 2, and mimics this behaviour to be somewhat compatible with MOS/VDP
                     ez80_serial.readBytes(&new_os_identifier,1);
-                    mos_send_packet(PACKET_GP, sizeof(new_os_identifier), &new_os_identifier); // only MOS packet that ElectronOS understands
                     if (new_os_identifier!=os_identifier)
                     {
                         os_identifier = new_os_identifier;
-                        if (os_identifier==OS_MOS)
-                            hal_printf ("MOS personality activated\r\n");
+                        if (os_identifier==OS_MOS) 
+                        {
+                            hal_ez80_serial_half_duplex ();
+                            hal_printf ("MOS personality activated [HD]\r\n");
+                        }
+                        if (os_identifier==OS_MOS_FULLDUPLEX) 
+                        {
+                            hal_ez80_serial_full_duplex ();
+                            hal_printf ("MOS personality activated [FD]\r\n");
+                        }
                         if (os_identifier==OS_ELECTRON)
-                            hal_printf ("Default personality activated\r\n");
+                        {
+                            hal_ez80_serial_full_duplex ();
+                            hal_printf ("ElectronOS personality activated\r\n");
+                        }
                         if (os_identifier==OS_ELECTRON_SG1000)
+                        {
+                            hal_ez80_serial_full_duplex ();
                             hal_printf ("SG1000 personality activated\r\n");
+                        }
                     }
+                    mos_send_packet(PACKET_GP, sizeof(new_os_identifier), &new_os_identifier); // only MOS packet that ElectronOS understands
                     break;
                 case VDU_CURSOR:
                 {

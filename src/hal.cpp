@@ -17,9 +17,16 @@ void hal_ez80_serial_init ()
 	ez80_serial.end();
     ez80_serial.begin(UART_BR, SERIAL_8N1, UART_RX, UART_TX);
 	ez80_serial.setPins(UART_RX, UART_TX, UART_CTS, UART_RTS);	// Must be called after begin
-	ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_CTS_RTS);			// Can be called whenever
+	hal_ez80_serial_half_duplex();
 }
-
+void hal_ez80_serial_half_duplex ()
+{
+	ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_RTS);				// default to half-duplex
+}
+void hal_ez80_serial_full_duplex ()
+{
+	ez80_serial.setHwFlowCtrlMode(HW_FLOWCTRL_CTS_RTS);			// set to full-duplex when EZ80 OS indicates this
+}
 void hal_hostpc_serial_init ()
 {
 	host_serial.begin(500000, SERIAL_8N1, 3, 1);

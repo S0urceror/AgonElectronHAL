@@ -31,6 +31,7 @@ void hal_hostpc_serial_init ();
 void hal_set_terminal (fabgl::Terminal*);
 char hal_hostpc_serial_read ();
 void hal_ez80_serial_init ();
-
+void hal_ez80_serial_half_duplex ();
+void hal_ez80_serial_full_duplex ();
 
 #endif
