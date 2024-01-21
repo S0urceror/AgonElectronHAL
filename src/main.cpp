@@ -469,20 +469,28 @@ void process_virtual_io_cmd (uint8_t cmd)
                         port = normal_out_req[0];
                         value = normal_out_req[1];
                         
-                        if (port==0x98 || port==0x99) // MSX TMS9918
-                            vdp.write (port-0x98,value);
-                        if (port==0xa0 || port==0xa1) // MSX AY-3-8910
-                            psg.write (port,value);                            
-                        if (port==0xBE || port==0xBF) // SG-1000 TMS9918
-                            vdp.write (port-0xbe,value);
-                        if (port==0x7e || port==0x7f) // SG-1000 SN76489AN
-                            psg2.write (value);
-                        if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
-                            ppi.write (port-0xdc,value);
+                        if (os_identifier==OS_ELECTRON)
+                        {
+                            if (port==0x98 || port==0x99) // MSX TMS9918
+                                vdp.write (port-0x98,value);
+                            if (port==0xa0 || port==0xa1) // MSX AY-3-8910
+                                psg.write (port,value);                            
+                        }
+                        if (os_identifier==OS_ELECTRON_SG1000)
+                        {
+                            if (port==0xBE || port==0xBF) // SG-1000 TMS9918
+                                vdp.write (port-0xbe,value);
+                            if (port==0x7e || port==0x7f) // SG-1000 SN76489AN
+                                psg2.write (value);
+                            if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
+                                ppi.write (port-0xdc,value);
+                        }
                         //hal_printf ("OUT (%02X), %02X\r\n",port,value);
                     }
                     break;
                 case 0b010:
+                    if (os_identifier!=OS_ELECTRON) // not supported
+                        break;
                     // OUTput, LDIRVM, multiple times, different values
                     if (ez80_serial.readBytes (repeatable_io_req,3)==3)
                     {
@@ -504,6 +512,8 @@ void process_virtual_io_cmd (uint8_t cmd)
                     }
                     break;
                 case 0b100:
+                    if (os_identifier!=OS_ELECTRON) // not supported
+                        break;
                     // OUTput, FILL, multiple times, same value
                     if (ez80_serial.readBytes (fillable_io_req,4)==4)
                     {
@@ -524,20 +534,27 @@ void process_virtual_io_cmd (uint8_t cmd)
                     // INput, single value
                     if (ez80_serial.readBytes (&port,1)==1)
                     {
-                        if (port==0x98 || port==0x99)
-                            value = vdp.read (port-0x98);
-                        if (port==0xbe || port==0xbf)
-                            value = vdp.read (port-0xbe);                            
-                        if (port==0xa2)
-                            value = psg.read (port);
-                        if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
-                            value = ppi.read (port-0xdc);
-
+                        if (os_identifier==OS_ELECTRON)
+                        {
+                            if (port==0x98 || port==0x99)
+                                value = vdp.read (port-0x98);
+                        }
+                        if (os_identifier==OS_ELECTRON_SG1000)
+                        {
+                            if (port==0xbe || port==0xbf)
+                                value = vdp.read (port-0xbe);                            
+                            if (port==0xa2)
+                                value = psg.read (port);
+                            if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
+                                value = ppi.read (port-0xdc);
+                        }
                         ez80_serial.write(value);
                         //hal_printf ("IN A,(%02X) => %02X\r\n",port,value);
                     }
                     break;
                 case 0b011:
+                    if (os_identifier!=OS_ELECTRON) // not supported
+                        break;
                     // INput, LDIRMV, multiple times, multiple value
                     if (ez80_serial.readBytes (repeatable_io_req,3)==3)
                     {
