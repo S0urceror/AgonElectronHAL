@@ -42,9 +42,10 @@ vdu_updater                 updater;
 #define VDU_UPDATE          0xA1
 #define OS_UNKNOWN          0
 #define OS_MOS              1
-#define OS_ELECTRON         2
-#define OS_ELECTRON_SG1000  3
-#define OS_MOS_FULLDUPLEX   4
+#define OS_MOS_FULLDUPLEX   2
+#define OS_ELECTRON         128
+#define OS_ELECTRON_SG1000  129
+
 uint8_t os_identifier   =   OS_UNKNOWN;
 
 #define PACKET_GP       0x00	// General poll data
