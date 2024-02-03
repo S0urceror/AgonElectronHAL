@@ -352,7 +352,7 @@ void TMS9918::draw_screen0 (uint8_t* dest,int scanline)
     for (character=0;character<40;character++)
     {
         // get pattern and color idx
-        nametable_idx = ((posY / 8) * 32) + character;
+        nametable_idx = ((posY / 8) * 40) + character;
         pattern = memory [nametable + nametable_idx];
         pattern_idx = pattern * 8 + (posY % 8);
         // get pixel pattern

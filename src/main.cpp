@@ -27,7 +27,7 @@ fabgl::Terminal*            terminal;
 TMS9918                     vdp;
 AY_3_8910                   psg;
 SN76489AN                   psg2;
-PPI8255                     ppi;
+PPI8255*                    ppi=NULL;
 bool                        ignore_escape = false;
 bool                        display_mode_direct=false;
 TaskHandle_t                mainTaskHandle;
@@ -45,6 +45,7 @@ vdu_updater                 updater;
 #define OS_MOS_FULLDUPLEX   2
 #define OS_ELECTRON         128
 #define OS_ELECTRON_SG1000  129
+#define OS_ELECTRON_MSX     130
 
 uint8_t os_identifier   =   OS_UNKNOWN;
 
@@ -227,31 +228,35 @@ void do_keys_ps2 ()
             }
             case OS_ELECTRON_SG1000:
             {
-                ppi.record_keypress (item.ASCII,modifier,item.vk,item.down);
+                if (ppi) 
+                {
+                    // record keypress, EZ80 will fetch this later in a separate PPI IN/OUT operation
+                    ppi->record_keypress (item.ASCII,modifier,item.vk,item.down);
+                }
+                break;
+            }
+            case OS_ELECTRON_MSX:
+            {
+                if (ppi)
+                {
+                    // record keypress
+                    uint8_t row = ppi->record_keypress (item.ASCII,modifier,item.vk,item.down);
+                    uint8_t bits = dynamic_cast <MSX_PPI8255*>(ppi)->get_row_bits (row);
+                    // immediately send it over to ElectronOS
+                    ez80_serial.write(0b11000000); // signals command mode
+                    ez80_serial.write(row); // keyboard matrix row
+                    ez80_serial.write(bits); // new keyboard matrix bits
+                    //hal_terminal_printf ("row:%d bits:%02x\r\n",row,bits);
+                }
                 break;
             }
             case OS_ELECTRON:
             {
                 // ElectronOS gets just the ASCII code
-                // only special keys get send differently
                 if (item.ASCII!=0)
                 {
                     if (item.down)
                         ez80_serial.write(item.ASCII);
-                    if (item.ASCII==0x20) // space
-                    {
-                        // also send virtual keycode (for SNSMAT)
-                        ez80_serial.write(0b11000000); // signals command mode
-                        ez80_serial.write(fabgl::VK_SPACE);
-                        ez80_serial.write(item.down?1:0);
-                    }
-                }
-                else 
-                {
-                    // send virtual keycode (for SNSMAT)
-                    ez80_serial.write(0b11000000); // signals command mode
-                    ez80_serial.write(item.vk);
-                    ez80_serial.write(item.down?1:0);
                 }
                 break;
             }
@@ -279,8 +284,6 @@ void setup()
 
     // setup audio driver
     init_audio_driver ();
-    psg.init ();
-    //psg2.init ();
 
     // setup serial to hostpc
     hal_hostpc_serial_init ();
@@ -330,12 +333,28 @@ void process_vdu ()
                         if (os_identifier==OS_ELECTRON)
                         {
                             hal_ez80_serial_full_duplex ();
-                            hal_printf ("ElectronOS personality activated\r\n");
+                            // default, not needed to show this
+                            //hal_printf ("ElectronOS personality activated\r\n");
+                        }
+                        if (os_identifier==OS_ELECTRON_MSX)
+                        {
+                            hal_ez80_serial_full_duplex ();
+                            hal_printf ("MSX personality activated\r\n");
+                            psg.init ();
+                            // instantiate correct PPI
+                            if (ppi)
+                                delete ppi;
+                            ppi = new MSX_PPI8255 ();
                         }
                         if (os_identifier==OS_ELECTRON_SG1000)
                         {
                             hal_ez80_serial_full_duplex ();
                             hal_printf ("SG1000 personality activated\r\n");
+                            psg2.init ();
+                            // instantiate correct PPI
+                            if (ppi)
+                                delete ppi;
+                            ppi = new SG1000_PPI8255 ();
                         }
                     }
                     mos_send_packet(PACKET_GP, sizeof(new_os_identifier), &new_os_identifier); // only MOS packet that ElectronOS understands
@@ -469,12 +488,16 @@ void process_virtual_io_cmd (uint8_t cmd)
                         port = normal_out_req[0];
                         value = normal_out_req[1];
                         
-                        if (os_identifier==OS_ELECTRON)
+                        if (os_identifier==OS_ELECTRON_MSX)
                         {
                             if (port==0x98 || port==0x99) // MSX TMS9918
                                 vdp.write (port-0x98,value);
                             if (port==0xa0 || port==0xa1) // MSX AY-3-8910
-                                psg.write (port,value);                            
+                                psg.write (port,value);        
+                            if (port==0xa8 || port==0xa9 || port==0xaa|| port==0xab)
+                                ppi->write (  port-0xa8,value);
+                            if (port==0x90 || port==0x91 || port==0x92|| port==0x93)
+                                hal_printf ("printer port not yet supported");
                         }
                         if (os_identifier==OS_ELECTRON_SG1000)
                         {
@@ -483,13 +506,13 @@ void process_virtual_io_cmd (uint8_t cmd)
                             if (port==0x7e || port==0x7f) // SG-1000 SN76489AN
                                 psg2.write (value);
                             if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
-                                ppi.write (port-0xdc,value);
+                                ppi->write (port-0xdc,value);
                         }
                         //hal_printf ("OUT (%02X), %02X\r\n",port,value);
                     }
                     break;
                 case 0b010:
-                    if (os_identifier!=OS_ELECTRON) // not supported
+                    if (os_identifier!=OS_ELECTRON_MSX) // not supported
                         break;
                     // OUTput, LDIRVM, multiple times, different values
                     if (ez80_serial.readBytes (repeatable_io_req,3)==3)
@@ -512,7 +535,7 @@ void process_virtual_io_cmd (uint8_t cmd)
                     }
                     break;
                 case 0b100:
-                    if (os_identifier!=OS_ELECTRON) // not supported
+                    if (os_identifier!=OS_ELECTRON_MSX) // not supported
                         break;
                     // OUTput, FILL, multiple times, same value
                     if (ez80_serial.readBytes (fillable_io_req,4)==4)
@@ -534,26 +557,30 @@ void process_virtual_io_cmd (uint8_t cmd)
                     // INput, single value
                     if (ez80_serial.readBytes (&port,1)==1)
                     {
-                        if (os_identifier==OS_ELECTRON)
+                        if (os_identifier==OS_ELECTRON_MSX)
                         {
                             if (port==0x98 || port==0x99)
                                 value = vdp.read (port-0x98);
+                            if (port==0xa2)
+                                value = psg.read (port);
+                            if (port==0xa8 || port==0xa9 || port==0xaa|| port==0xab)
+                                value = ppi->read (port-0xa8);
+                            if (port==0x90 || port==0x91 || port==0x92|| port==0x93)
+                                hal_printf ("printer port not yet supported");
                         }
                         if (os_identifier==OS_ELECTRON_SG1000)
                         {
                             if (port==0xbe || port==0xbf)
                                 value = vdp.read (port-0xbe);                            
-                            if (port==0xa2)
-                                value = psg.read (port);
                             if (port==0xdc || port==0xdd || port==0xde|| port==0xdf)
-                                value = ppi.read (port-0xdc);
+                                value = ppi->read (port-0xdc);
                         }
                         ez80_serial.write(value);
                         //hal_printf ("IN A,(%02X) => %02X\r\n",port,value);
                     }
                     break;
                 case 0b011:
-                    if (os_identifier!=OS_ELECTRON) // not supported
+                    if (os_identifier!=OS_ELECTRON_MSX) // not supported
                         break;
                     // INput, LDIRMV, multiple times, multiple value
                     if (ez80_serial.readBytes (repeatable_io_req,3)==3)

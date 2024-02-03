@@ -169,6 +169,14 @@ void AY_3_8910::write (uint8_t port, uint8_t value)
             case 0x0d:
                 env_shape = value & 0b00001111;
                 break;
+            // gpio read/write
+            case 0x0e:
+                gpio = value;
+                break;
+            // gpio control
+            case 0x0f:
+                gpio_control = value;
+                break;
             default:
                 break;
         }
@@ -191,12 +199,30 @@ void AY_3_8910::write (uint8_t port, uint8_t value)
         updateC = false;
     }
 }
+
 uint8_t AY_3_8910::read (uint8_t port)
 {
     uint8_t val=0;
 
     if (port==0xa2)
-        val = 0x3f; // no things pressed on the joystick (yet), all signals 1-High
+    {
+        switch (register_select)
+        {
+            // gpio read/write
+            case 0x0e:
+                if (gpio_control & 0b01000000)
+                    // joystick portB
+                    val = 0x3f; // no things pressed on the joystick (yet), all signals 1-High
+                else
+                    // joystick portA
+                    val = 0x3f; // no things pressed on the joystick (yet), all signals 1-High
+                break;
+            // gpio control
+            case 0x0f:
+                val = gpio_control;
+                break;
+        }
+    }
 
     return val;
 }
