@@ -173,7 +173,7 @@ void do_serial_hostpc ()
                 {
                     // MOS wants a whole packet for 1 character
                     // allows to detect special key combo's
-                    if (os_identifier==OS_MOS)
+                    if (os_identifier==OS_MOS || os_identifier==OS_MOS_FULLDUPLEX)
                     {
                         uint8_t packet[] = {
                             ch,
@@ -215,6 +215,7 @@ void do_keys_ps2 ()
         switch (os_identifier)
         {
             case OS_MOS:
+            case OS_MOS_FULLDUPLEX:
             {
                 uint8_t packet[] = {
                     item.ASCII,
