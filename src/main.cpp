@@ -32,7 +32,6 @@ bool                        ignore_escape = false;
 bool                        display_mode_direct=false;
 TaskHandle_t                mainTaskHandle;
 vdu_updater                 updater;
-                    
 
 #define VDU_SYSTEM          0
 #define VDU_GP              0x80
@@ -241,11 +240,11 @@ void do_keys_ps2 ()
                 {
                     // record keypress
                     uint8_t row = ppi->record_keypress (item.ASCII,modifier,item.vk,item.down);
-                    uint8_t bits = dynamic_cast <MSX_PPI8255*>(ppi)->get_row_bits (row);
+                    // uint8_t bits = ppi->get_row_bits (row);
                     // immediately send it over to ElectronOS
-                    ez80_serial.write(0b11000000); // signals command mode
-                    ez80_serial.write(row); // keyboard matrix row
-                    ez80_serial.write(bits); // new keyboard matrix bits
+                    // ez80_serial.write(0b11000000); // signals command mode
+                    // ez80_serial.write(row); // keyboard matrix row
+                    // ez80_serial.write(bits); // new keyboard matrix bits
                     //hal_terminal_printf ("row:%d bits:%02x\r\n",row,bits);
                 }
                 break;
@@ -595,7 +594,11 @@ void process_virtual_io_cmd (uint8_t cmd)
                                 value = vdp.read (port-0x98);
                             // if (port==0xa2)
                             //     value = psg.read (port);
-
+                            if (port==0xa9) 
+                            {
+                                ppi->write (0xaa-0xa8,i);
+                                value = ppi->read (port-0xa8);
+                            }
                             ez80_serial.write(value);
                         }
                         //hal_printf ("IN (%02Xh), xx - %d repeated\r\n",port,i);
@@ -634,7 +637,9 @@ void do_serial_ez80 ()
 
 void loop()
 {
+    // first check if EZ80 has send something and handle this completely
+    do_serial_ez80();
+    // then check keyboard and serial interface
     do_keys_ps2();
     do_serial_hostpc();
-    do_serial_ez80();
 }

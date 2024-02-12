@@ -307,7 +307,7 @@ uint8_t MSX_PPI8255::read (uint8_t port)
             return 0x00; 
         case 1: 
             // return bits belonging to row indicated by portC
-            return rows[portC];
+            return rows[portC & 0x0f];
         case 2: 
             return portC;
         case 3: 
@@ -318,25 +318,24 @@ uint8_t MSX_PPI8255::read (uint8_t port)
 
 uint8_t MSX_PPI8255::record_keypress (uint8_t ascii,uint8_t modifier,uint8_t vk,uint8_t down)
 {
-    uint8_t row=-1;
     uint8_t mask;
     if (vk<sizeof(msx_keys_to_matrix))
     {
-        row = msx_keys_to_matrix[vk].msx_matrix_row;
+        current_row = msx_keys_to_matrix[vk].msx_matrix_row;
         mask = msx_keys_to_matrix[vk].msx_matrix_mask;
         if (down)
         {
             // zero the right bits defined in the mask
             mask = ~mask;
-            rows[row] &= mask;
+            rows[current_row] &= mask;
         }
         else
         {
             // activate the right bits defined in the mask
-            rows[row] |= mask;
+            rows[current_row] |= mask;
         }
     }
-    return row;
+    return current_row;
 }
 uint8_t MSX_PPI8255::get_row_bits (uint8_t row)
 {
@@ -346,7 +345,14 @@ uint8_t MSX_PPI8255::get_row_bits (uint8_t row)
     // error, fallback
     return 0xff; // all bits high, no keypress
 }
-
+uint8_t MSX_PPI8255::get_next_row ()
+{
+    uint8_t row = current_row;
+    current_row++;
+    if (current_row>=sizeof(rows))
+        current_row = 0;
+    return row;
+}
 SG1000_PPI8255::SG1000_PPI8255 () : PPI8255()
 {
     for (int i=0;i<(sizeof (rows)/sizeof (uint16_t));i++)
@@ -385,6 +391,7 @@ uint8_t SG1000_PPI8255::read (uint8_t port)
 // 7	1U	1D	1L	1R	1TL	1TR	2U	2D	2L	2R	2TL	2TR
 uint8_t SG1000_PPI8255::record_keypress (uint8_t ascii,uint8_t modifier,uint8_t vk,uint8_t down)
 {
+    current_row = 7;
     // only supporting row 7
     if (down!=1)
     {
@@ -440,9 +447,27 @@ uint8_t SG1000_PPI8255::record_keypress (uint8_t ascii,uint8_t modifier,uint8_t 
     }
 }
 
+uint8_t SG1000_PPI8255::get_row_bits (uint8_t row)
+{
+    if (row<sizeof(rows))
+        return rows[row];
+
+    // error, fallback
+    return 0xff; // all bits high, no keypress
+}
+uint8_t SG1000_PPI8255::get_next_row ()
+{
+    uint8_t row = current_row;
+    current_row++;
+    if (current_row>=sizeof(rows))
+        current_row = 0;
+    return row;
+}
+
 PPI8255::PPI8255 ()
 {
     portA = portB = portC = control = 0;
+    current_row = 0;
 }
 void PPI8255::write (uint8_t port, uint8_t value)
 {
