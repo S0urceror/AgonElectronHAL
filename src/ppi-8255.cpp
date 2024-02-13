@@ -2,6 +2,42 @@
 #include "hal.h"
 #include <fabutils.h>
 
+uint8_t ascii_to_vk[] = {
+    0, // 0
+    0, // 1
+    0, // 2
+    0, // 3
+    0, // 4
+    0, // 5
+    0, // 6
+    0, // 7
+    fabgl::VirtualKey::VK_BACKSPACE, // 8
+    fabgl::VirtualKey::VK_TAB, // 9
+    fabgl::VirtualKey::VK_RETURN, // 10 - LF
+    0, // 11
+    0, // 12
+    0, // 13 - CR
+    0, // 14
+    0, // 15
+    0, // 16
+    0, // 17
+    0, // 18
+    0, // 19
+    0, // 20
+    0, // 21
+    0, // 22
+    0, // 23
+    0, // 24
+    0, // 25
+    0, // 26
+    0, // 27
+    0, // 28
+    0, // 29
+    0, // 30
+    0, // 31
+    fabgl::VirtualKey::VK_SPACE, // 32
+    0
+};
 
 vk_to_msx_matrix msx_keys_to_matrix[] = { 
     { 00, 0b00000000 }, // VK_NONE,            /**< No character (marks the first virtual key) */
@@ -319,6 +355,10 @@ uint8_t MSX_PPI8255::read (uint8_t port)
 uint8_t MSX_PPI8255::record_keypress (uint8_t ascii,uint8_t modifier,uint8_t vk,uint8_t down)
 {
     uint8_t mask;
+
+    if (ascii>0 && vk==0 && ascii<sizeof (ascii_to_vk))
+        vk = ascii_to_vk[ascii];
+
     if (vk<sizeof(msx_keys_to_matrix))
     {
         current_row = msx_keys_to_matrix[vk].msx_matrix_row;

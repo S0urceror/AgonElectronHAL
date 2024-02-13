@@ -183,9 +183,16 @@ void do_serial_hostpc ()
                         };
                         mos_send_packet(PACKET_KEYCODE, sizeof packet, packet);
                     }
-                    else 
+                    if (os_identifier==OS_ELECTRON)
+                    { 
                         // ElectronOS is simpler, just send the character
                         ez80_serial.write(ch);
+                    }
+                    if (os_identifier==OS_ELECTRON_MSX)
+                    {
+                        if (ppi)
+                            ppi->record_keypress (ch,0,0,true);
+                    }
                 }
             }
         } 
