@@ -2,6 +2,8 @@
 #define __PPI_8255_H
 
 #include <stdint.h>
+#include <vector>
+#include <fabutils.h>
 
 class PPI8255
 {
@@ -30,6 +32,12 @@ class SG1000_PPI8255 : public PPI8255
         uint8_t get_next_row ();
 };
 
+typedef struct
+{
+    uint8_t vk;
+    uint8_t modifier;
+} ascii_to_vk_modifier;
+
 typedef struct  
 {
     uint8_t msx_matrix_row;
@@ -40,6 +48,7 @@ class MSX_PPI8255 : public PPI8255
 {
     private:
         uint8_t rows[11];
+        std::vector <uint8_t> vk_key_up;
     public:
         MSX_PPI8255 ();
         uint8_t read (uint8_t port);

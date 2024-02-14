@@ -2,41 +2,134 @@
 #include "hal.h"
 #include <fabutils.h>
 
-uint8_t ascii_to_vk[] = {
-    0, // 0
-    0, // 1
-    0, // 2
-    0, // 3
-    0, // 4
-    0, // 5
-    0, // 6
-    0, // 7
-    fabgl::VirtualKey::VK_BACKSPACE, // 8
-    fabgl::VirtualKey::VK_TAB, // 9
-    fabgl::VirtualKey::VK_RETURN, // 10 - LF
-    0, // 11
-    0, // 12
-    0, // 13 - CR
-    0, // 14
-    0, // 15
-    0, // 16
-    0, // 17
-    0, // 18
-    0, // 19
-    0, // 20
-    0, // 21
-    0, // 22
-    0, // 23
-    0, // 24
-    0, // 25
-    0, // 26
-    0, // 27
-    0, // 28
-    0, // 29
-    0, // 30
-    0, // 31
-    fabgl::VirtualKey::VK_SPACE, // 32
-    0
+ascii_to_vk_modifier ascii_to_vk[] = {
+    {0,0}, // 0
+    {0,0}, // 1
+    {0,0}, // 2
+    {0,0}, // 3
+    {0,0}, // 4
+    {0,0}, // 5
+    {0,0}, // 6
+    {0,0}, // 7
+    {fabgl::VirtualKey::VK_BACKSPACE,0}, // 8
+    {fabgl::VirtualKey::VK_TAB,0}, // 9
+    {fabgl::VirtualKey::VK_RETURN,0}, // 10 - LF
+    {0,0}, // 11
+    {0,0}, // 12
+    {0,0}, // 13 - CR
+    {0,0}, // 14
+    {0,0}, // 15
+    {0,0}, // 16
+    {0,0}, // 17
+    {0,0}, // 18
+    {0,0}, // 19
+    {0,0}, // 20
+    {0,0}, // 21
+    {0,0}, // 22
+    {0,0}, // 23
+    {0,0}, // 24
+    {0,0}, // 25
+    {0,0}, // 26
+    {0,0}, // 27
+    {0,0}, // 28
+    {0,0}, // 29
+    {0,0}, // 30
+    {0,0}, // 31
+    {fabgl::VirtualKey::VK_SPACE,0}, // 32
+    {fabgl::VirtualKey::VK_EXCLAIM,1}, // 33
+    {fabgl::VirtualKey::VK_QUOTEDBL,1}, // 34
+    {fabgl::VirtualKey::VK_HASH,1}, // 35
+    {fabgl::VirtualKey::VK_DOLLAR,1}, // 36
+    {fabgl::VirtualKey::VK_PERCENT,1}, // 37
+    {fabgl::VirtualKey::VK_AMPERSAND,1}, // 38
+    {fabgl::VirtualKey::VK_QUOTE,0}, // 39
+    {fabgl::VirtualKey::VK_LEFTPAREN,1}, // 40
+    {fabgl::VirtualKey::VK_RIGHTPAREN,1}, // 41
+    {fabgl::VirtualKey::VK_ASTERISK,1}, // 42
+    {fabgl::VirtualKey::VK_PLUS,1}, // 43
+    {fabgl::VirtualKey::VK_COMMA,0}, // 44
+    {fabgl::VirtualKey::VK_MINUS,0}, // 45
+    {fabgl::VirtualKey::VK_PERIOD,0}, // 46
+    {fabgl::VirtualKey::VK_SLASH,0}, // 47
+    {fabgl::VirtualKey::VK_0,0}, // 48
+    {fabgl::VirtualKey::VK_1,0}, // 49
+    {fabgl::VirtualKey::VK_2,0}, // 50
+    {fabgl::VirtualKey::VK_3,0}, // 51
+    {fabgl::VirtualKey::VK_4,0}, // 52
+    {fabgl::VirtualKey::VK_5,0}, // 53
+    {fabgl::VirtualKey::VK_6,0}, // 54
+    {fabgl::VirtualKey::VK_7,0}, // 55
+    {fabgl::VirtualKey::VK_8,0}, // 56
+    {fabgl::VirtualKey::VK_9,0}, // 57
+    {fabgl::VirtualKey::VK_COLON,1},
+    {fabgl::VirtualKey::VK_SEMICOLON,0},
+    {fabgl::VirtualKey::VK_LESS,1},
+    {fabgl::VirtualKey::VK_EQUALS,0},
+    {fabgl::VirtualKey::VK_GREATER,1},
+    {fabgl::VirtualKey::VK_QUESTION,1},
+    {fabgl::VirtualKey::VK_AT,1},
+    {fabgl::VirtualKey::VK_A,1},
+    {fabgl::VirtualKey::VK_B,1},
+    {fabgl::VirtualKey::VK_C,1},
+    {fabgl::VirtualKey::VK_D,1},
+    {fabgl::VirtualKey::VK_E,1},
+    {fabgl::VirtualKey::VK_F,1},
+    {fabgl::VirtualKey::VK_G,1},
+    {fabgl::VirtualKey::VK_H,1},
+    {fabgl::VirtualKey::VK_I,1},
+    {fabgl::VirtualKey::VK_J,1},
+    {fabgl::VirtualKey::VK_K,1},
+    {fabgl::VirtualKey::VK_L,1},
+    {fabgl::VirtualKey::VK_M,1},
+    {fabgl::VirtualKey::VK_N,1},
+    {fabgl::VirtualKey::VK_O,1},
+    {fabgl::VirtualKey::VK_P,1},
+    {fabgl::VirtualKey::VK_Q,1},
+    {fabgl::VirtualKey::VK_R,1},
+    {fabgl::VirtualKey::VK_S,1},
+    {fabgl::VirtualKey::VK_T,1},
+    {fabgl::VirtualKey::VK_U,1},
+    {fabgl::VirtualKey::VK_V,1},
+    {fabgl::VirtualKey::VK_W,1},
+    {fabgl::VirtualKey::VK_X,1},
+    {fabgl::VirtualKey::VK_Y,1},
+    {fabgl::VirtualKey::VK_Z,1},
+    {fabgl::VirtualKey::VK_LEFTBRACKET,0},
+    {fabgl::VirtualKey::VK_BACKSLASH,0},
+    {fabgl::VirtualKey::VK_RIGHTBRACKET,0},
+    {fabgl::VirtualKey::VK_CARET,1},
+    {fabgl::VirtualKey::VK_UNDERSCORE,1},
+    {fabgl::VirtualKey::VK_GRAVEACCENT,0},
+    {fabgl::VirtualKey::VK_a,0},
+    {fabgl::VirtualKey::VK_b,0},
+    {fabgl::VirtualKey::VK_c,0},
+    {fabgl::VirtualKey::VK_d,0},
+    {fabgl::VirtualKey::VK_e,0},
+    {fabgl::VirtualKey::VK_f,0},
+    {fabgl::VirtualKey::VK_g,0},
+    {fabgl::VirtualKey::VK_h,0},
+    {fabgl::VirtualKey::VK_i,0},
+    {fabgl::VirtualKey::VK_j,0},
+    {fabgl::VirtualKey::VK_k,0},
+    {fabgl::VirtualKey::VK_l,0},
+    {fabgl::VirtualKey::VK_m,0},
+    {fabgl::VirtualKey::VK_n,0},
+    {fabgl::VirtualKey::VK_o,0},
+    {fabgl::VirtualKey::VK_p,0},
+    {fabgl::VirtualKey::VK_q,0},
+    {fabgl::VirtualKey::VK_r,0},
+    {fabgl::VirtualKey::VK_s,0},
+    {fabgl::VirtualKey::VK_t,0},
+    {fabgl::VirtualKey::VK_u,0},
+    {fabgl::VirtualKey::VK_v,0},
+    {fabgl::VirtualKey::VK_w,0},
+    {fabgl::VirtualKey::VK_x,0},
+    {fabgl::VirtualKey::VK_y,0},
+    {fabgl::VirtualKey::VK_z,0},
+    {fabgl::VirtualKey::VK_LEFTBRACE,1},
+    {fabgl::VirtualKey::VK_VERTICALBAR,1},
+    {fabgl::VirtualKey::VK_RIGHTBRACE,1},
+    {fabgl::VirtualKey::VK_TILDE,1}
 };
 
 vk_to_msx_matrix msx_keys_to_matrix[] = { 
@@ -336,6 +429,10 @@ MSX_PPI8255::MSX_PPI8255 () : PPI8255()
 }
 uint8_t MSX_PPI8255::read (uint8_t port)
 {
+    uint8_t row;
+    uint8_t return_value;
+    uint8_t vk;
+
     switch (port)
     {
         case 0: 
@@ -343,7 +440,18 @@ uint8_t MSX_PPI8255::read (uint8_t port)
             return 0x00; 
         case 1: 
             // return bits belonging to row indicated by portC
-            return rows[portC & 0x0f];
+            row = portC & 0x0f;
+            return_value = rows[row];
+            if (!vk_key_up.empty())
+            {
+                vk = vk_key_up.back();
+                if (msx_keys_to_matrix[vk].msx_matrix_row==row)
+                {
+                    record_keypress (0,0,vk,false);
+                    vk_key_up.pop_back();
+                }
+            }
+            return return_value;
         case 2: 
             return portC;
         case 3: 
@@ -357,7 +465,20 @@ uint8_t MSX_PPI8255::record_keypress (uint8_t ascii,uint8_t modifier,uint8_t vk,
     uint8_t mask;
 
     if (ascii>0 && vk==0 && ascii<sizeof (ascii_to_vk))
-        vk = ascii_to_vk[ascii];
+    {
+        // when we have no virtual key code, ie. only ascii, ie from host serial
+        // simulate keypress from keyboard
+        vk = ascii_to_vk[ascii].vk;
+        modifier = ascii_to_vk[ascii].modifier;
+        // and key up after it has been read
+        if (modifier==1)
+        {
+            vk_key_up.push_back (fabgl::VirtualKey::VK_LSHIFT);
+            record_keypress (0,0,fabgl::VirtualKey::VK_LSHIFT,true);
+        }
+        vk_key_up.push_back(vk);
+        return record_keypress (0,0,vk,true);
+    }
 
     if (vk<sizeof(msx_keys_to_matrix))
     {
@@ -485,6 +606,7 @@ uint8_t SG1000_PPI8255::record_keypress (uint8_t ascii,uint8_t modifier,uint8_t 
                 break;
         }
     }
+    return 7;
 }
 
 uint8_t SG1000_PPI8255::get_row_bits (uint8_t row)
