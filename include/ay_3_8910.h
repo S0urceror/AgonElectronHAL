@@ -23,8 +23,14 @@ class AY_3_8910_Volume
             // in a logarithmic scale (3dB per step). YM2149 has 32 levels, the 16 extra
             // levels are only used for envelope volumes
             // 1/sqrt(sqrt(2)) ~= 1/(1.5dB)
+                        // initialize volumeTab
+            //
+            // Calculate the volume->voltage conversion table. The AY-3-8910 has 16 levels,
+            // in a logarithmic scale (3dB per step). YM2149 has 32 levels, the 16 extra
+            // levels are only used for envelope volumes
+            // 1/sqrt(sqrt(2)) ~= 1/(1.5dB)
             for (int i=0;i<16;i++)
-                volumeTab[i] = 127.0 / pow(sqrt(2),15-i);
+                volumeTab[i] = 127.0 / pow(sqrt(2.0),15.0-i);
         }
         uint8_t getAgonVolume (uint8_t ay_3_8190_volume)
         {
