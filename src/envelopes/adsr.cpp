@@ -1,3 +1,4 @@
+
 #include "envelopes/adsr.h"
 
 ADSRVolumeEnvelope::ADSRVolumeEnvelope(uint16_t attack, uint16_t decay, uint8_t sustain, uint16_t release)
@@ -5,7 +6,7 @@ ADSRVolumeEnvelope::ADSRVolumeEnvelope(uint16_t attack, uint16_t decay, uint8_t 
 {
 	// attack, decay, release are time values in milliseconds
 	// sustain is 0-255, centered on 127, and is the relative sustain level
-	debug_log("audioDriver: ADSRVolumeEnvelope: attack=%d, decay=%d, sustain=%d, release=%d\n\r", this->_attack, this->_decay, this->_sustain, this->_release);
+	//debug_log("audioDriver: ADSRVolumeEnvelope: attack=%d, decay=%d, sustain=%d, release=%d\n\r", this->_attack, this->_decay, this->_sustain, this->_release);
 }
 
 uint8_t ADSRVolumeEnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed, int32_t duration) {

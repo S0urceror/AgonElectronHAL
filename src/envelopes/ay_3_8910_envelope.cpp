@@ -69,7 +69,7 @@ AY_3_8910_VolumeEnvelope::AY_3_8910_VolumeEnvelope(uint8_t envelope,uint16_t per
     _alternate = envelope & 0b0010;
     _hold = envelope & 0b0001;
 	_period = 256.0 * float(period) / float (MASTER_FREQUENCY) * 1000.0;
-	debug_log("audioDriver: AY_3_8910_VolumeEnvelope: continue=%d, attack=%d, alternate=%d, hold=%d, period=%d\n\r", _continue,_attack,_alternate,_hold,_period);
+	//debug_log("audioDriver: AY_3_8910_VolumeEnvelope: continue=%d, attack=%d, alternate=%d, hold=%d, period=%d\n\r", _continue,_attack,_alternate,_hold,_period);
 }
 
 uint8_t AY_3_8910_VolumeEnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed, int32_t duration) {

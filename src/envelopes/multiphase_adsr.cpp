@@ -38,12 +38,12 @@ MultiphaseADSREnvelope::MultiphaseADSREnvelope(std::shared_ptr<std::vector<Volum
 			break;
 		}
 	}
-	debug_log("MultiphaseADSREnvelope created with %d attack, %d sustain, %d release phases\n\r", _attack->size(), _sustain->size(), _release->size());
-	debug_log("  attackDuration %d, sustainDuration %d, releaseDuration %d\n\r", _attackDuration, _sustainDuration, _releaseDuration);
-	debug_log("  attackLevel %d, sustainLevel %d, releaseLevel %d\n\r", _attackLevel, _sustainLevel, _releaseLevel);
-	for (auto subPhase : *this->_attack) {
-		debug_log("  level %d, duration %d\n\r", subPhase.level, subPhase.duration);
-	}
+	//debug_log("MultiphaseADSREnvelope created with %d attack, %d sustain, %d release phases\n\r", _attack->size(), _sustain->size(), _release->size());
+	//debug_log("  attackDuration %d, sustainDuration %d, releaseDuration %d\n\r", _attackDuration, _sustainDuration, _releaseDuration);
+	//debug_log("  attackLevel %d, sustainLevel %d, releaseLevel %d\n\r", _attackLevel, _sustainLevel, _releaseLevel);
+	// for (auto subPhase : *this->_attack) {
+	// 	debug_log("  level %d, duration %d\n\r", subPhase.level, subPhase.duration);
+	// }
 }
 
 uint8_t MultiphaseADSREnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed, int32_t duration) {
