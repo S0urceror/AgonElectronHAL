@@ -7,6 +7,8 @@
 
 #define PLAY_SOUND_PRIORITY 3
 
+AY_3_8910_Volume ay_3_8910_volume;
+
 AY_3_8910::AY_3_8910 ()
 {
     register_select=0;
@@ -46,7 +48,7 @@ void AY_3_8910::updateChannel (uint8_t channel, uint32_t tone_freq,bool volume_e
             if (audioChannels[channel]->getStatus() & AUDIO_STATUS_HAS_VOLUME_ENVELOPE)
                 audioChannels[channel]->setVolumeEnvelope (nullptr);
         }
-        setVolume (channel,volume * FABGL_AMPLITUDE_MULTIPLIER);
+        setVolume (channel,ay_3_8910_volume.getAgonVolume(volume));
     }
     else
     {
@@ -56,7 +58,7 @@ void AY_3_8910::updateChannel (uint8_t channel, uint32_t tone_freq,bool volume_e
         {
             audioChannels[channel]->setVolumeEnvelope (std::move (envelope));
             // base volume
-            setVolume (channel,15 * FABGL_AMPLITUDE_MULTIPLIER);
+            setVolume (channel,ay_3_8910_volume.getAgonVolume(15));
         }
     }
 }

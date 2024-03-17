@@ -1,6 +1,7 @@
 #include "ay_3_8910.h"
 #include "envelopes/ay_3_8910_envelope.h"
 
+extern AY_3_8910_Volume ay_3_8910_volume;
 // switch (env_shape)
 // {
 //     case 0b0000:
@@ -84,9 +85,9 @@ uint8_t AY_3_8910_VolumeEnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed
 	{
 		factor = ((float) elapsed)/((float) _period);
 		if (_attack)
-			volume = baseVolume*factor;				// waveform: /
+			volume = 15*factor;				// waveform: /
 		else
-			volume = baseVolume-baseVolume*factor;	// waveform: ＼
+			volume = 15-15*factor;	// waveform: ＼
 
 		_hold_volume = volume;
 	}
@@ -100,7 +101,7 @@ uint8_t AY_3_8910_VolumeEnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed
 			{
 				volume = _hold_volume;				// waveform: _______ or ￣￣￣￣￣￣￣
 				if (_alternate)
-					volume = baseVolume-volume; // flip
+					volume = 15-volume; // flip
 			}
 			else
 			{
@@ -111,20 +112,20 @@ uint8_t AY_3_8910_VolumeEnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed
 
 				// normal waveform
 				if (_attack)
-					volume = baseVolume*factor;				// waveform: /
+					volume = 15*factor;				// waveform: /
 				else
-					volume = baseVolume-baseVolume*factor;	// waveform: ＼
+					volume = 15-15*factor;	// waveform: ＼
 
 				// alternate
 				if (period_cnt%2 == 1 && _alternate)
-					volume = baseVolume-volume;
+					volume = 15-volume;
 			}
 		}
 		else
 			// stop emitting sound, signal finished
 			volume = 0;
 	}
-	return volume;
+	return ay_3_8910_volume.getAgonVolume(volume);
 }
 
 bool AY_3_8910_VolumeEnvelope::isReleasing(uint32_t elapsed, int32_t duration) {
