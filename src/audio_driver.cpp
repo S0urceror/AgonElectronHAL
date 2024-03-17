@@ -8,42 +8,40 @@
 //
 // Modinfo:
 
-#ifndef AGON_AUDIO_H
-#define AGON_AUDIO_H
-
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 #include <fabgl.h>
 
 #include "audio_channel.h"
 #include "audio_sample.h"
 #include "types.h"
 
-#define AUDIO_CHANNELS			6		// Default number of audio channels
-#define MAX_AUDIO_CHANNELS		32		// Maximum number of audio channels
-#define PLAY_SOUND_PRIORITY		3		// Sound driver task priority with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest
-
 // audio channels and their associated tasks
-std::unordered_map<uint8_t, std::shared_ptr<audio_channel>> audio_channels;
+std::unordered_map<uint8_t, std::shared_ptr<AudioChannel>> audioChannels;
 std::vector<TaskHandle_t, psram_allocator<TaskHandle_t>> audioHandlers;
-std::unordered_map<uint8_t, std::shared_ptr<audio_sample>> samples;	// Storage for the sample data
-fabgl::SoundGenerator		SoundGenerator;		// The audio class
+
+std::unordered_map<uint16_t, std::shared_ptr<AudioSample>> samples;	// Storage for the sample data
+
+fabgl::SoundGenerator *soundGenerator;				// audio handling sub-system
+std::mutex soundGeneratorMutex;
 
 // Audio channel driver task
 //
-void audio_driver(void * parameters) {
-	uint8_t channel = *(uint8_t *)parameters;
+void audioDriver(void * parameters) {
+	uint8_t channelNum = *(uint8_t *)parameters;
+	auto channel = make_shared_psram<AudioChannel>(channelNum);
 
-	audio_channels[channel] = make_shared_psram<audio_channel>(channel);
+	audioChannels[channelNum] = channel;
 	while (true) {
-		audio_channels[channel]->loop();
+		channel->loop();
 		vTaskDelay(1);
 	}
 }
 
-void init_audio_channel(uint8_t channel) {
-	xTaskCreatePinnedToCore(audio_driver,  "audio_driver",
+void initAudioChannel(uint8_t channel) {
+	xTaskCreatePinnedToCore(audioDriver,  "audioDriver",
 		4096,						// This stack size can be checked & adjusted by reading the Stack Highwater
 		&channel,					// Parameters
 		PLAY_SOUND_PRIORITY,		// Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
@@ -61,36 +59,67 @@ void audioTaskAbortDelay(uint8_t channel) {
 void audioTaskKill(uint8_t channel) {
 	if (audioHandlers[channel]) {
 		vTaskDelete(audioHandlers[channel]);
+		audioChannels[channel]->detachSoundGenerator();
 		audioHandlers[channel] = nullptr;
-		audio_channels.erase(channel);
+		audioChannels.erase(channel);
 		//debug_log("audioTaskKill: channel %d killed\n\r", channel);
 	} else {
 		//debug_log("audioTaskKill: channel %d not found\n\r", channel);
 	}
 }
 
+// Change the sample rate
+//
+void setSampleRate(uint16_t sampleRate) {
+	// make a new sound generator and re-attach all our active channels
+	if (sampleRate == 65535) {
+		sampleRate = AUDIO_DEFAULT_SAMPLE_RATE;
+	}
+	auto lock = std::unique_lock<std::mutex>(soundGeneratorMutex);
+	// detatch the old sound generator
+	if (soundGenerator) {
+		soundGenerator->play(false);
+		for (const auto &channelPair : audioChannels) {
+			if (!channelPair.second) {
+				//debug_log("duff channel pair for channel %d, skipping\n\r", channelPair.first);
+				audioChannels.erase(channelPair.first);
+				continue;
+			}
+			channelPair.second->detachSoundGenerator();
+		}
+		delete soundGenerator;
+	}
+	// delete the old sound generator
+	soundGenerator = new fabgl::SoundGenerator(sampleRate);
+	for (const auto &channelPair : audioChannels) {
+		channelPair.second->attachSoundGenerator();
+	}
+	soundGenerator->play(true);
+}
+
 // Initialise the sound driver
 //
-void init_audio_driver() {
+void initAudio() {
+	// make new sound generator
+	setSampleRate(AUDIO_DEFAULT_SAMPLE_RATE);
 	audioHandlers.reserve(MAX_AUDIO_CHANNELS);
-	//debug_log("init_audio: we have reserved %d channels\n\r", audioHandlers.capacity());
+	//debug_log("initAudio: we have reserved %d channels\n\r", audioHandlers.capacity());
 	for (uint8_t i = 0; i < AUDIO_CHANNELS; i++) {
-		init_audio_channel(i);
+		initAudioChannel(i);
 	}
-	SoundGenerator.play(true);
 }
 
 // Channel enabled?
 //
 bool channelEnabled(uint8_t channel) {
-	return channel < MAX_AUDIO_CHANNELS && audio_channels[channel];
+	return channel < MAX_AUDIO_CHANNELS && audioChannels.find(channel) != audioChannels.end();
 }
 
 // Play a note
 //
-uint8_t play_note(uint8_t channel, uint8_t volume, uint16_t frequency, uint16_t duration) {
+uint8_t playNote(uint8_t channel, uint8_t volume, uint16_t frequency, uint16_t duration) {
 	if (channelEnabled(channel)) {
-		return audio_channels[channel]->play_note(volume, frequency, duration);
+		return audioChannels[channel]->playNote(volume, frequency, duration);
 	}
 	return 1;
 }
@@ -99,50 +128,120 @@ uint8_t play_note(uint8_t channel, uint8_t volume, uint16_t frequency, uint16_t 
 //
 uint8_t getChannelStatus(uint8_t channel) {
 	if (channelEnabled(channel)) {
-		return audio_channels[channel]->getStatus();
+		return audioChannels[channel]->getStatus();
 	}
 	return -1;
 }
 
 // Set channel volume
 //
-void setVolume(uint8_t channel, uint8_t volume) {
-	if (channelEnabled(channel)) {
-		audio_channels[channel]->setVolume(volume);
+uint8_t setVolume(uint8_t channel, uint8_t volume) {
+	if (channel == 255) {
+		if (volume == 255) {
+			return soundGenerator->volume();
+		}
+		soundGenerator->setVolume(volume < 128 ? volume : 127);
+		return soundGenerator->volume();
+	} else if (channelEnabled(channel)) {
+		return audioChannels[channel]->setVolume(volume);
 	}
+	return 255;
 }
 
 // Set channel frequency
 //
-void setFrequency(uint8_t channel, uint16_t frequency) {
+uint8_t setFrequency(uint8_t channel, uint16_t frequency) {
 	if (channelEnabled(channel)) {
-		audio_channels[channel]->setFrequency(frequency);
+		return audioChannels[channel]->setFrequency(frequency);
 	}
+	return 0;
 }
 
 // Set channel waveform
 //
-void setWaveform(uint8_t channel, int8_t waveformType) {
+uint8_t setWaveform(uint8_t channel, int8_t waveformType, uint16_t sampleId) {
 	if (channelEnabled(channel)) {
-		auto channelRef = audio_channels[channel];
-		channelRef->setWaveform(waveformType, channelRef);
+		auto channelRef = audioChannels[channel];
+		return channelRef->setWaveform(waveformType, channelRef, sampleId);
 	}
+	return 0;
 }
 
-// Clear a sample
+// Seek to a position on a channel
 //
-uint8_t clearSample(uint8_t sampleIndex) {
-	//debug_log("clearSample: sample %d\n\r", sampleIndex);
-	if (sampleIndex < MAX_AUDIO_SAMPLES) {
-		if (samples.find(sampleIndex) == samples.end()) {
-			//debug_log("clearSample: sample %d not found\n\r", sampleIndex);
-			return 0;
-		}
-		samples.erase(sampleIndex);
-		//debug_log("reset sample\n\r");
+uint8_t seekTo(uint8_t channel, uint32_t position) {
+	if (channelEnabled(channel)) {
+		return audioChannels[channel]->seekTo(position);
+	}
+	return 0;
+}
+
+// Set channel duration
+//
+uint8_t setDuration(uint8_t channel, uint16_t duration) {
+	if (channelEnabled(channel)) {
+		return audioChannels[channel]->setDuration(duration);
+	}
+	return 0;
+}
+
+// Set channel sample rate
+//
+uint8_t setSampleRate(uint8_t channel, uint16_t sampleRate) {
+	if (channel == 255) {
+		// set underlying sample rate
+		setSampleRate(sampleRate);
+		return 0;
+	}
+	if (channelEnabled(channel)) {
+		return audioChannels[channel]->setSampleRate(sampleRate);
+	}
+	return 0;
+}
+
+// Enable a channel
+//
+uint8_t enableChannel(uint8_t channel) {
+	if (channelEnabled(channel)) {
+		// channel already enabled
+		return 1;
+	}
+	if (channel >= 0 && channel < MAX_AUDIO_CHANNELS && audioChannels[channel] == nullptr) {
+		// channel not enabled, so enable it
+		initAudioChannel(channel);
 		return 1;
 	}
 	return 0;
 }
 
-#endif // AGON_AUDIO_H
+// Disable a channel
+//
+uint8_t disableChannel(uint8_t channel) {
+	if (channelEnabled(channel)) {
+		audioTaskKill(channel);
+		return 1;
+	}
+	return 0;
+}
+
+// Clear a sample
+//
+uint8_t clearSample(uint16_t sampleId) {
+	//debug_log("clearSample: sample %d\n\r", sampleId);
+	if (samples.find(sampleId) == samples.end()) {
+		//debug_log("clearSample: sample %d not found\n\r", sampleId);
+		return 1;
+	}
+	samples[sampleId] = nullptr;
+	//debug_log("reset sample\n\r");
+	return 0;
+}
+
+// Reset samples
+//
+void resetSamples() {
+	//debug_log("resetSamples\n\r");
+	samples.clear();
+}
+
+

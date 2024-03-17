@@ -1,22 +1,11 @@
-//
-// Title:			Agon Video BIOS - Audio class
-// Author:			Dean Belfield
-// Contributors:	Steve Sims (enhancements for more sophisticated audio support)
-//                  S0urceror (PlatformIO compatibility)
-// Created:			05/09/2022
-// Last Updated:	08/10/2023
-//
-// Modinfo:
-
-#include <fabgl.h>
-#include "audio_envelopes/volume.h"
+#include "envelopes/adsr.h"
 
 ADSRVolumeEnvelope::ADSRVolumeEnvelope(uint16_t attack, uint16_t decay, uint8_t sustain, uint16_t release)
 	: _attack(attack), _decay(decay), _sustain(sustain), _release(release)
 {
 	// attack, decay, release are time values in milliseconds
 	// sustain is 0-255, centered on 127, and is the relative sustain level
-	//debug_log("audio_driver: ADSRVolumeEnvelope: attack=%d, decay=%d, sustain=%d, release=%d\n\r", this->_attack, this->_decay, this->_sustain, this->_release);
+	debug_log("audioDriver: ADSRVolumeEnvelope: attack=%d, decay=%d, sustain=%d, release=%d\n\r", this->_attack, this->_decay, this->_sustain, this->_release);
 }
 
 uint8_t ADSRVolumeEnvelope::getVolume(uint8_t baseVolume, uint32_t elapsed, int32_t duration) {

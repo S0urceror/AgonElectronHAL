@@ -18,7 +18,7 @@
 #include "ay_3_8910.h"
 #include "sn76489an.h"
 #include "ppi-8255.h"
-#include "audio_driver.h"
+#include "agon_audio.h"
 #include "updater.h"
 
 fabgl::PS2Controller        ps2;
@@ -290,7 +290,7 @@ void setup()
     set_display_normal (true);
 
     // setup audio driver
-    init_audio_driver ();
+    initAudio ();
 
     // setup serial to hostpc
     hal_hostpc_serial_init ();

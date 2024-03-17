@@ -1,8 +1,8 @@
 //
-// Title:	        Audio Frequency Envelope support
-// Author:        	Steve Sims
-// Created:       	13/08/2023
-// Last Updated:	13/08/2023
+// Title:			Audio Frequency Envelope support
+// Author:			Steve Sims
+// Created:			13/08/2023
+// Last Updated:	14/01/2024
 
 #ifndef ENVELOPE_FREQUENCY_H
 #define ENVELOPE_FREQUENCY_H
@@ -10,11 +10,7 @@
 #include <memory>
 #include <vector>
 
-class FrequencyEnvelope {
-	public:
-		virtual uint16_t getFrequency(uint16_t baseFrequency, uint32_t elapsed, int32_t duration);
-		virtual bool isFinished(uint32_t elapsed, int32_t duration);
-};
+#include "./types.h"
 
 struct FrequencyStepPhase {
 	int16_t adjustment;		// change of frequency per step
@@ -36,7 +32,5 @@ class SteppedFrequencyEnvelope : public FrequencyEnvelope {
 		bool _cumulative;
 		bool _restrict;
 };
-
-
 
 #endif // ENVELOPE_FREQUENCY_H

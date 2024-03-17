@@ -1,7 +1,7 @@
 #include "sn76489an.h"
 #include "fabgl.h"
 #include "hal.h" 
-#include "audio_driver.h"
+#include "agon_audio.h"
 #include "audio_channel.h"
 
 #define PLAY_SOUND_PRIORITY 3
@@ -23,11 +23,11 @@ SN76489AN::SN76489AN ()
 void SN76489AN::init ()
 {
     // tone
-    setWaveform (0,AUDIO_WAVE_SQUARE);
-    setWaveform (1,AUDIO_WAVE_SQUARE);
-    setWaveform (2,AUDIO_WAVE_SQUARE);
+    setWaveform (0,AUDIO_WAVE_SQUARE,0);
+    setWaveform (1,AUDIO_WAVE_SQUARE,0);
+    setWaveform (2,AUDIO_WAVE_SQUARE,0);
     // noise
-    setWaveform (3,AUDIO_WAVE_AY_3_8910_NOISE);
+    setWaveform (3,AUDIO_WAVE_AY_3_8910_NOISE,0);
 }
 
 void SN76489AN::updateSound (uint8_t channel, uint8_t amp, uint16_t freq)

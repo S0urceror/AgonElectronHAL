@@ -1,8 +1,9 @@
 #include "ay_3_8910.h"
 #include "fabgl.h"
 #include "hal.h" 
-#include "audio_driver.h"
+#include "agon_audio.h"
 #include "audio_channel.h"
+#include "envelopes/ay_3_8910_envelope.h"
 
 #define PLAY_SOUND_PRIORITY 3
 
@@ -24,54 +25,73 @@ AY_3_8910::AY_3_8910 ()
 void AY_3_8910::init ()
 {
     // tone
-    setWaveform (0,AUDIO_WAVE_SQUARE);
-    setWaveform (1,AUDIO_WAVE_SQUARE);
-    setWaveform (2,AUDIO_WAVE_SQUARE);
+    setWaveform (0,AUDIO_WAVE_SQUARE,0);
+    setWaveform (1,AUDIO_WAVE_SQUARE,0);
+    setWaveform (2,AUDIO_WAVE_SQUARE,0);
     // noise
-    setWaveform (3,AUDIO_WAVE_AY_3_8910_NOISE);
-    setWaveform (4,AUDIO_WAVE_AY_3_8910_NOISE);
-    setWaveform (5,AUDIO_WAVE_AY_3_8910_NOISE);
+    setWaveform (3,AUDIO_WAVE_AY_3_8910_NOISE,0);
+    setWaveform (4,AUDIO_WAVE_AY_3_8910_NOISE,0);
+    setWaveform (5,AUDIO_WAVE_AY_3_8910_NOISE,0);
+}
 
-    // setWaveform (3,AUDIO_WAVE_SINE);
-    // setWaveform (4,AUDIO_WAVE_SINE);
-    // setWaveform (5,AUDIO_WAVE_SINE);
+void AY_3_8910::updateChannel (uint8_t channel, uint32_t tone_freq,bool volume_envelope,uint8_t volume)
+{
+    // on
+    setFrequency (channel,MASTER_FREQUENCY_DIV / tone_freq);
+    if (!volume_envelope)
+    {
+        // normal volume control, switch off envelopes, if any
+        if (channelEnabled(channel))
+        {
+            if (audioChannels[channel]->getStatus() & AUDIO_STATUS_HAS_VOLUME_ENVELOPE)
+                audioChannels[channel]->setVolumeEnvelope (nullptr);
+        }
+        setVolume (channel,volume * FABGL_AMPLITUDE_MULTIPLIER);
+    }
+    else
+    {
+        // volume envelope
+        std::unique_ptr<AY_3_8910_VolumeEnvelope> envelope = make_unique_psram<AY_3_8910_VolumeEnvelope>(env_shape,env_period);
+        if (channelEnabled(channel))
+        {
+            audioChannels[channel]->setVolumeEnvelope (std::move (envelope));
+            // base volume
+            setVolume (channel,15 * FABGL_AMPLITUDE_MULTIPLIER);
+        }
+    }
 }
 
 void AY_3_8910::updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32_t tone_freq, uint32_t noise_freq)
 {
-    if (amp & 0x10 > 0)
+    bool tone = (mixer & (0b00000001<<channel))==0;
+    bool noise = (mixer & (0b00001000<<channel))==0;
+    bool volume_envelope = (amp & 0x10) != 0;
+    uint8_t volume = amp & 0x0f;
+
+    if (tone && tone_freq > 0)
     {
-        // volume envelope switched on
-    }
-    // tone channel
-    if ((mixer & (0b00000001<<channel))==0 && tone_freq > 0)
-    {
-        // on
-        setFrequency (channel,MASTER_FREQUENCY_DIV / tone_freq);
-        setVolume (channel,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
-        // hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,tone_freq,MASTER_FREQUENCY_DIV / tone_freq);
-        // hal_hostpc_printf ("%c tone freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / tone_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+        updateChannel (channel,tone_freq,volume_envelope,volume);
     } 
     else
     {
         // off
-        setVolume (channel,0);
-        //hal_hostpc_printf ("%c tone off\r\n",channel+'A');
+        if (!volume_envelope)
+            setVolume (channel,0);
+        if (audioChannels[channel]->getStatus() & AUDIO_STATUS_HAS_VOLUME_ENVELOPE)
+                audioChannels[channel]->setVolumeEnvelope (nullptr);
     }
     // noise channel + 3
-    if ((mixer & (0b00001000<<channel))==0 && noise_freq > 0)
+    if (noise && noise_freq > 0)
     {
-        // on
-        setFrequency (channel+3,MASTER_FREQUENCY_DIV / noise_freq);
-        setVolume (channel+3,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
-        // hal_hostpc_printf ("%d / %d = %d\r\n",MASTER_FREQUENCY_DIV,noise_freq,MASTER_FREQUENCY_DIV / noise_freq);
-        // hal_hostpc_printf ("%c noise freq: %d, vol: %d\r\n",channel+'A',MASTER_FREQUENCY_DIV / noise_freq,(amp & 0x0f) * FABGL_AMPLITUDE_MULTIPLIER);
+        updateChannel (channel+3,noise_freq,volume_envelope,volume);
     } 
     else
     {
         // off
-        setVolume (channel+3,0);
-        //hal_hostpc_printf ("%c noise off\r\n",channel+'A');
+        if (!volume_envelope)
+            setVolume (channel+3,0);
+        if (audioChannels[channel+3]->getStatus() & AUDIO_STATUS_HAS_VOLUME_ENVELOPE)
+            audioChannels[channel+3]->setVolumeEnvelope (nullptr);
     }
 }
 void AY_3_8910::write (uint8_t port, uint8_t value)
@@ -168,6 +188,12 @@ void AY_3_8910::write (uint8_t port, uint8_t value)
             // Envelope shape
             case 0x0d:
                 env_shape = value & 0b00001111;
+                if (amplA&0b10000)
+                    updateA = true;
+                if (amplB&0b10000)
+                    updateC = true;
+                if (amplC&0b10000)
+                    updateC = true;
                 break;
             // gpio read/write
             case 0x0e:

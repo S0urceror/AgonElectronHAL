@@ -48,7 +48,12 @@ void _hal_printf (uint8_t dest, const char* format, va_list ap) {
 	vsnprintf(buf, sizeof(buf), format, ap);
 	// print to host PC and/or fabgl terminal
 	if (dest & 0b00000010)
-		host_serial.print(buf);
+		#ifdef USERSPACE
+			debug_log (buf);
+		#else
+			host_serial.print(buf);
+		#endif
+	
 	if (fabgl_terminal!=nullptr && (dest & 0b00000001))
 		fabgl_terminal->write (buf);
 }

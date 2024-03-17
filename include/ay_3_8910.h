@@ -33,6 +33,7 @@ class AY_3_8910
         uint8_t     gpio_control;
 
         void updateSound (uint8_t channel, uint8_t mixer, uint8_t amp, uint32_t tone_freq, uint32_t noise_freq);
+        void updateChannel (uint8_t channel, uint32_t tone_freq,bool volume_envelope,uint8_t volume);
 };
 
 #endif // __AY_3_8910_H_

@@ -10,30 +10,68 @@
 
 #include "audio_sample.h"
 
-audio_sample::audio_sample(uint32_t length) :
-    length(length)    
-{
-    data = (int8_t *) PreferPSRAMAlloc(length);
-    if (!data) {
-        //("audio_sample: failed to allocate %d bytes\n\r", length);
-    }
+AudioSample::~AudioSample() {
+	// iterate over channels
+	// for (auto &channelPair : this->channels) {
+	// 	auto channel = channelPair.second.lock();
+	// 	if (channel) {
+	// 		// Remove sample from channel
+	//		debug_log("AudioSample: removing sample from channel %d\n\r", channel->channel());
+	// 		// TODO change so only removes if channel is definitely set to this sample
+	// 		channel->setWaveform(AUDIO_WAVE_DEFAULT, nullptr);
+	// 	}
+	// }
 }
 
-audio_sample::~audio_sample() {
-	// iterate over channels
-	for (auto channelPair : this->channels) {
-		auto channelRef = channelPair.second;
-		if (!channelRef.expired()) {
-			auto channel = channelRef.lock();
-			//debug_log("audio_sample: removing sample from channel %d\n\r", channel->channel());
-			// Remove sample from channel
-			channel->setWaveform(AUDIO_WAVE_DEFAULT, nullptr);
-		}
+int8_t AudioSample::getSample(uint32_t & index, uint32_t & blockIndex) {
+	// get the next sample
+	if (blockIndex >= blocks.size()) {
+		// we've reached the end of the sample, and haven't looped, so return 0 (silence)
+		return 0;
 	}
 
-	if (this->data) {
-		free(this->data);
+	auto block = blocks[blockIndex];
+	int8_t sample = block->getBuffer()[index++];
+
+	if (index >= block->size()) {
+		// block reached end, move to next block
+		index = 0;
+		blockIndex++;
 	}
 
-	//debug_log("audio_sample cleared\n\r");
+	if (format == AUDIO_FORMAT_8BIT_UNSIGNED) {
+		sample = sample - 128;
+	}
+
+	return sample;
+}
+
+void AudioSample::seekTo(uint32_t position, uint32_t & index, uint32_t & blockIndex, int32_t & repeatCount) {
+	// NB repeatCount calculation here can result in zero, or a negative number,
+	// or a number that's beyond the end of the sample, which is fine
+	// it just means that the sample will never loop
+	if (repeatLength < 0) {
+		// repeat to end of sample
+		repeatCount = getSize() - position;
+	} else if (repeatLength > 0) {
+		auto repeatEnd = repeatStart + repeatLength;
+		repeatCount = repeatEnd - position;
+	} else {
+		repeatCount = 0;
+	}
+
+	blockIndex = 0;
+	index = position;
+	while (blockIndex < blocks.size() && index >= blocks[blockIndex]->size()) {
+		index -= blocks[blockIndex]->size();
+		blockIndex++;
+	}
+}
+
+uint32_t AudioSample::getSize() {
+	uint32_t samples = 0;
+	for (auto block : blocks) {
+		samples += block->size();
+	}
+	return samples;
 }
